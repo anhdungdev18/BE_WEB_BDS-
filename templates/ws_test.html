@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8">
+<h3>WS Test</h3>
+<label>Room ID: <input id="room" value="00986b68-a9d8-4634-95a9-20f4c29e0d7e"></label>
+<button onclick="connect()">Connect</button>
+<br><br>
+<input id="msg" placeholder="Tin nhắn...">
+<button onclick="sendMsg()">Gửi</button>
+<pre id="log" style="background:#111;color:#0f0;padding:10px;height:300px;overflow:auto"></pre>
+<script>
+let ws; const log = m => (document.getElementById('log').textContent += m+"\n");
+function connect(){
+  const room = document.getElementById('room').value.trim();
+  ws = new WebSocket("ws://" + location.hostname + ":8001/ws/chat/" + room + "/");
+  ws.onopen =  () => log("[OPEN] connected");
+  ws.onmessage = e => log("[RECV] " + e.data);
+  ws.onclose =  () => log("[CLOSE]");
+}
+function sendMsg(){
+  const text = document.getElementById('msg').value;
+  ws.send(JSON.stringify({type:"chat.message", sender_id:"F2ZLNLJJ6", text}));
+  log("[SEND] " + text);
+}
+</script>

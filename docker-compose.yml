@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: webbds-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: web_bds
+      MYSQL_USER: webuser
+      MYSQL_PASSWORD: webpass
+    ports:
+      # Port host:3307 -> container:3306
+      - "3308:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      # Nếu muốn auto import dump lần đầu thì:
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d
+    command: [
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci"
+    ]
+
+  web:
+    build: .
+    container_name: webbds-backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      # Mapping đúng với DATABASES trong settings.py
+      DB_HOST: db          # tên service db
+      DB_PORT: 3306        # port TRONG container db
+      DB_NAME: web_bds
+      DB_USER: webuser
+      DB_PASSWORD: webpass
+      # Có thể thêm SECRET_KEY, DEBUG nếu huynh đang đọc từ env
+      # SECRET_KEY: "something-secret"
+      # DEBUG: "1"
+    ports:
+      - "8000:8000"        # host:container
+    volumes:
+      - .:/app
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000
+      "
+
+volumes:
+  db_data:

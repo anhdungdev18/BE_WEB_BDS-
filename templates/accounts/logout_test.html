@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Test Đăng xuất (JWT)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 24px; }
+    .row { margin-bottom: 12px; }
+    label { display: block; font-weight: 600; margin-bottom: 6px; }
+    textarea, input { width: 100%; padding: 8px; font-family: monospace; }
+    button { padding: 10px 16px; cursor: pointer; }
+    .ok { color: #137333; font-weight: 600; }
+    .err { color: #b00020; font-weight: 600; }
+    .note { font-size: 13px; color: #666; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 900px){ .grid { grid-template-columns: 1fr 1fr; } }
+    pre { background: #f7f7f7; padding: 12px; border-radius: 6px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <h1>Test Đăng xuất (JWT)</h1>
+  <p class="note">
+    Dán <b>access</b> và <b>refresh</b> token của huynh vào ô dưới, rồi bấm <b>Đăng xuất</b>. 
+    Mặc định gọi đến: <code>/api/accounts/logout/</code>.
+  </p>
+
+  <div class="row">
+    <label for="baseUrl">Base URL</label>
+    <input id="baseUrl" value="http://127.0.0.1:8000" />
+    <div class="note">Nếu test qua điện thoại: đổi thành <code>http://192.168.1.121:8000</code> (và đã thêm IP vào <code>ALLOWED_HOSTS</code>).</div>
+  </div>
+
+  <div class="grid">
+    <div class="row">
+      <label for="access">Access token</label>
+      <textarea id="access" rows="6" placeholder="eyJhbGciOi..."></textarea>
+      <div class="note">Header sẽ là: <code>Authorization: Bearer &lt;access&gt;</code></div>
+    </div>
+
+    <div class="row">
+      <label for="refresh">Refresh token</label>
+      <textarea id="refresh" rows="6" placeholder="eyJhbGciOi..."></textarea>
+      <div class="note">Body sẽ là: <code>{"refresh":"&lt;refresh&gt;"}</code></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="btnLogout">Đăng xuất</button>
+    <button id="btnFillDemo" type="button">Dán token mẫu (demo)</button>
+    <span id="status"></span>
+  </div>
+
+  <h3>Kết quả</h3>
+  <pre id="output">{ }</pre>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  // Gán token mẫu nhanh (để huynh dán chuỗi vừa login)
+  $('btnFillDemo').onclick = () => {
+    $('access').value = localStorage.getItem('access') || '';
+    $('refresh').value = localStorage.getItem('refresh') || '';
+    if(!$('access').value || !$('refresh').value){
+      alert('Chưa có token trong localStorage. Hãy dán thủ công hoặc lưu trước:\nlocalStorage.setItem("access","..."); localStorage.setItem("refresh","...");');
+    }
+  };
+
+  $('btnLogout').onclick = async () => {
+    const baseUrl = $('baseUrl').value.replace(/\/+$/,'');
+    const access  = $('access').value.trim();
+    const refresh = $('refresh').value.trim();
+
+    $('status').textContent = '';
+    $('output').textContent = '{ }';
+
+    if(!access || !refresh){
+      $('status').innerHTML = '<span class="err">Thiếu access hoặc refresh token</span>';
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${baseUrl}/api/accounts/logout/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${access}`
+        },
+        body: JSON.stringify({ refresh })
+      });
+
+      const text = await resp.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+      $('output').textContent = JSON.stringify(data, null, 2);
+      if(resp.ok){
+        $('status').innerHTML = '<span class="ok">✅ Thành công</span>';
+      } else {
+        $('status').innerHTML = `<span class="err">❌ ${resp.status} ${resp.statusText}</span>`;
+      }
+    } catch (e) {
+      $('status').innerHTML = '<span class="err">❌ Lỗi fetch (kiểm tra server hoặc CORS)</span>';
+      $('output').textContent = String(e);
+    }
+  };
+</script>
+</body>
+</html>
