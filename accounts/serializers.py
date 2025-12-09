@@ -5,8 +5,42 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils.translation import gettext_lazy as _
 from accounts.models import MembershipOrder
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from accounts.models.role import Role
+from accounts.models.permission import Permission
 
 User = get_user_model()
+
+
+class BdsTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom JWT: ngoài thông tin mặc định, thêm:
+    - roles: ["MEMBER", "AGENT", ...]
+    - perms: ["post.create", "post.create_vip", ...]
+    - is_agent: bool
+    """
+
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Lấy list role của user
+        roles_qs = user.roles.all()  # ManyToMany từ User -> Role
+        role_names = list(roles_qs.values_list("role_name", flat=True))
+
+        # Lấy list permission code (qua RolePermission)
+        perm_codes = list(
+            Permission.objects.filter(roles__in=roles_qs)
+            .values_list("code", flat=True)
+            .distinct()
+        )
+
+        # Gắn thêm vào payload
+        token["roles"] = role_names
+        token["perms"] = perm_codes
+        token["is_agent"] = "AGENT" in role_names
+
+        return token
 
 
 # -------------------------------------------------------------------

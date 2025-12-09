@@ -7,9 +7,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     #path("", include("polls.urls")),
     path("", RedirectView.as_view(url="/admin/", permanent=False)),
-    path("api/rooms", create_room),
-    path("api/rooms/<uuid:room_id>/messages", room_messages),
-    path("ws-test", TemplateView.as_view(template_name="ws_test.html")),
+    # Messaging app
+    path("rooms/", include("messaging.urls")),
 
     # Accounts app 
     path("api/accounts/", include("accounts.urls")),
@@ -17,4 +16,5 @@ urlpatterns = [
     path("api/listings/", include("listings.urls")),
     # Engagement app 
     path("api/engagement/", include("engagement.urls", namespace="engagement")),
+
 ]

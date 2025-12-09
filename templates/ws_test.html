@@ -1,23 +1,140 @@
-<!doctype html><meta charset="utf-8">
-<h3>WS Test</h3>
-<label>Room ID: <input id="room" value="00986b68-a9d8-4634-95a9-20f4c29e0d7e"></label>
-<button onclick="connect()">Connect</button>
-<br><br>
-<input id="msg" placeholder="Tin nhắn...">
-<button onclick="sendMsg()">Gửi</button>
-<pre id="log" style="background:#111;color:#0f0;padding:10px;height:300px;overflow:auto"></pre>
-<script>
-let ws; const log = m => (document.getElementById('log').textContent += m+"\n");
-function connect(){
-  const room = document.getElementById('room').value.trim();
-  ws = new WebSocket("ws://" + location.hostname + ":8001/ws/chat/" + room + "/");
-  ws.onopen =  () => log("[OPEN] connected");
-  ws.onmessage = e => log("[RECV] " + e.data);
-  ws.onclose =  () => log("[CLOSE]");
-}
-function sendMsg(){
-  const text = document.getElementById('msg').value;
-  ws.send(JSON.stringify({type:"chat.message", sender_id:"F2ZLNLJJ6", text}));
-  log("[SEND] " + text);
-}
-</script>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Login & Chat</title>
+</head>
+<body>
+  <h2>Đăng nhập</h2>
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Mật khẩu">
+  <button onclick="login()">Đăng nhập</button>
+
+  <pre id="loginResult"></pre>
+
+  <hr>
+
+  <h2>Test tạo room</h2>
+  <input id="sellerId" placeholder="seller_id (ID môi giới)">
+  <input id="listingId" placeholder="listing_id (ID bài đăng)">
+  <button onclick="createRoom()">Tạo phòng</button>
+
+  <pre id="roomResult"></pre>
+
+  <hr>
+
+  <h2>Test WebSocket chat</h2>
+  <input id="roomId" placeholder="room_id">
+  <button onclick="connectWs()">Connect WS</button><br><br>
+
+  <input id="msgText" placeholder="Nội dung tin nhắn">
+  <button onclick="sendMsg()">Gửi</button>
+
+  <pre id="wsLog"></pre>
+
+  <script>
+    let accessToken = null;
+    let socket = null;
+
+    async function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      const res = await fetch("http://127.0.0.1:8000/api/accounts/login/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+      document.getElementById("loginResult").textContent = JSON.stringify(data, null, 2);
+
+      if (res.ok && data.access) {
+        accessToken = data.access;
+        alert("Đăng nhập OK, đã có access token");
+      } else {
+        alert("Đăng nhập lỗi");
+      }
+    }
+
+    async function createRoom() {
+      if (!accessToken) {
+        alert("Chưa có access token, đăng nhập trước đã");
+        return;
+      }
+
+      const sellerId = document.getElementById("sellerId").value;
+      const listingId = document.getElementById("listingId").value;
+
+      const res = await fetch("http://127.0.0.1:8000/api/rooms/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + accessToken
+        },
+        body: JSON.stringify({
+          seller_id: sellerId,
+          listing_id: listingId || null
+        })
+      });
+
+      const data = await res.json();
+      document.getElementById("roomResult").textContent = JSON.stringify(data, null, 2);
+
+      if (res.ok && data.room_id) {
+        document.getElementById("roomId").value = data.room_id;
+        alert("Tạo room OK, room_id đã được set sẵn");
+      }
+    }
+
+    function connectWs() {
+      if (!accessToken) {
+        alert("Chưa có access token, đăng nhập trước đã");
+        return;
+      }
+      const roomId = document.getElementById("roomId").value.trim();
+      if (!roomId) {
+        alert("Nhập room_id trước");
+        return;
+      }
+
+      const url = `ws://127.0.0.1:8000/ws/chat/${roomId}/?token=${accessToken}`;
+      socket = new WebSocket(url);
+
+      socket.onopen = () => {
+        logWs("✅ WS connected");
+      };
+
+      socket.onmessage = (event) => {
+        logWs("📩 " + event.data);
+      };
+
+      socket.onclose = () => {
+        logWs("❌ WS closed");
+      };
+
+      socket.onerror = (e) => {
+        logWs("⚠️ WS error");
+      };
+    }
+
+    function sendMsg() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        alert("WebSocket chưa connect");
+        return;
+      }
+      const text = document.getElementById("msgText").value;
+      socket.send(JSON.stringify({
+        type: "chat.message",
+        text: text
+      }));
+      logWs("📤 gửi: " + text);
+    }
+
+    function logWs(msg) {
+      const pre = document.getElementById("wsLog");
+      pre.textContent += msg + "\n";
+    }
+  </script>
+</body>
+</html>

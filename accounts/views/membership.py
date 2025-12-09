@@ -4,31 +4,34 @@ from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from rest_framework.generics import ListAPIView
 
 from rest_framework.views import APIView
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 
 from accounts.models import (
     MembershipPlan,
     MembershipOrder,
-    Role,
-    UserRole,
 )
 from accounts.utils.vietqr import build_vietqr_url
 from accounts.serializers import MembershipOrderListSerializer
-from rest_framework.pagination import PageNumberPagination 
+
+from accounts.services.membership_services import (
+    mark_order_paid_and_activate,
+)
+
 
 class MembershipUpgradeInitAPIView(APIView):
     """
-    User (MEMBER) gọi API này để khởi tạo đơn nâng cấp lên AGENT.
+    User (MEMBER) gọi API này để khởi tạo đơn nâng cấp lên AGENT (VIP tài khoản).
 
     POST /api/accounts/membership/upgrade/init/
     Body (optional):
     {
-      "plan_code": "AGENT_1M"
+      "plan_code": "AGENT_1M"   // mặc định nếu không gửi
     }
 
     Nếu đã có 1 order PENDING cho cùng user + plan:
@@ -43,27 +46,14 @@ class MembershipUpgradeInitAPIView(APIView):
         user = request.user
         plan_code = request.data.get("plan_code", "AGENT_1M")
 
-        # 1. Kiểm tra user đã là AGENT chưa
-        already_agent = UserRole.objects.filter(
-            user=user,
-            role__role_name="AGENT",
-            is_active=True,
-        ).exists()
-
-        if already_agent:
-            return Response(
-                {"ok": 0, "error": "ALREADY_AGENT"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 2. Lấy gói cần nâng cấp
+        # 1. Lấy gói cần nâng cấp (chỉ lấy gói đang active)
         plan = get_object_or_404(
             MembershipPlan,
             code=plan_code,
             is_active=True,
         )
 
-        # 3. Tìm order PENDING cũ (nếu có) cho cùng user + plan
+        # 2. Tìm order PENDING cũ (nếu có) cho cùng user + plan
         existing_order = (
             MembershipOrder.objects
             .filter(
@@ -97,7 +87,7 @@ class MembershipUpgradeInitAPIView(APIView):
 
             order.save(update_fields=["transfer_note", "qr_image_url"])
         else:
-            # 4. Không có order cũ -> tạo order mới PENDING
+            # 3. Không có order cũ -> tạo order mới PENDING
             order = MembershipOrder.objects.create(
                 user=user,
                 plan=plan,
@@ -106,23 +96,23 @@ class MembershipUpgradeInitAPIView(APIView):
                 transfer_note="TEMP",  # tạm, lát update lại
             )
 
-            # 5. Sinh nội dung chuyển khoản (transfer_note) gắn với user + order
+            # 4. Sinh nội dung chuyển khoản (transfer_note) gắn với user + order
             transfer_note = f"UPGRADE_USER_{user.id}_ORDER_{order.id}"
 
-            # 6. Build URL ảnh QR VietQR
+            # 5. Build URL ảnh QR VietQR
             qr_url = build_vietqr_url(
                 amount_vnd=order.amount_vnd,
                 transfer_note=transfer_note,
             )
 
-            # 7. Cập nhật lại order
+            # 6. Cập nhật lại order
             order.transfer_note = transfer_note
             order.qr_image_url = qr_url
             order.save(update_fields=["transfer_note", "qr_image_url"])
 
             created_new = True
 
-        # 8. Trả dữ liệu cho FE
+        # 7. Trả dữ liệu cho FE
         data = {
             "ok": 1,
             "is_new_order": created_new,        # True: vừa tạo, False: dùng lại
@@ -133,19 +123,21 @@ class MembershipUpgradeInitAPIView(APIView):
             "transfer_note": order.transfer_note,
             "qr_image_url": order.qr_image_url,
             "status": order.status,
+            "created_at": order.created_at,
         }
         return Response(data, status=status.HTTP_201_CREATED)
 
 
 class MembershipOrderMarkPaidAPIView(APIView):
     """
-    Admin xác nhận 1 order đã được thanh toán, đồng thời gán role AGENT cho user.
-
+    Admin xác nhận 1 order đã được thanh toán,
+    KHÔNG cần nhập số tiền.
+    
     POST /api/accounts/membership/orders/mark-paid/
-    Body ví dụ (giờ cho simple thôi):
+    Body:
     {
       "order_id": 5,
-      "bank_ref": "TEST_THUNDER"
+      "bank_ref": "MB123456789"   // optional
     }
     """
 
@@ -173,119 +165,22 @@ class MembershipOrderMarkPaidAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # 4. Đánh dấu đã thanh toán
-        order.status = MembershipOrder.Status.PAID
-        order.bank_ref = bank_ref
-        order.paid_at = timezone.now()
-        order.save(update_fields=["status", "bank_ref", "paid_at"])
-
-        # 5. Gán role AGENT cho user qua bảng UserRole
-        try:
-            agent_role = Role.objects.get(role_name="AGENT")
-        except Role.DoesNotExist:
-            return Response(
-                {"ok": 0, "error": "AGENT_ROLE_NOT_FOUND"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # 4. Đánh dấu PAID + kích hoạt / gia hạn VIP tài khoản (UserMembership + role AGENT)
+        order = mark_order_paid_and_activate(order, bank_ref=bank_ref)
 
         user = order.user
-
-        UserRole.objects.get_or_create(
-            user=user,
-            role=agent_role,
-        )
+        membership = getattr(user, "membership", None)
 
         return Response(
             {
                 "ok": 1,
-                "message": "UPGRADED_TO_AGENT",
-                "user_id": user.id,
+                "message": "ORDER_MARKED_PAID_AND_VIP_ACTIVATED",
                 "order_id": order.id,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    """
-    Admin xác nhận 1 order đã được thanh toán, đồng thời gán role AGENT cho user.
-
-    POST /api/accounts/membership/orders/mark-paid/
-    Body:
-    {
-      "order_id": 5,
-      "paid_amount": 100000,
-      "bank_ref": "MB123456789"   // optional
-    }
-    """
-
-    permission_classes = [IsAuthenticated, IsAdminUser]
-
-    @transaction.atomic
-    def post(self, request):
-        order_id = request.data.get("order_id")
-        paid_amount = request.data.get("paid_amount")
-        bank_ref = request.data.get("bank_ref", "")
-
-        # 1. Validate input
-        if not order_id or paid_amount is None:
-            return Response(
-                {"ok": 0, "error": "order_id_and_paid_amount_required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            paid_amount = int(paid_amount)
-        except (TypeError, ValueError):
-            return Response(
-                {"ok": 0, "error": "paid_amount_must_be_int"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 2. Lấy order
-        order = get_object_or_404(MembershipOrder, id=order_id)
-
-        # 3. Order phải đang ở trạng thái PENDING
-        if order.status != MembershipOrder.Status.PENDING:
-            return Response(
-                {"ok": 0, "error": "ORDER_NOT_PENDING"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 4. Kiểm tra số tiền
-        if paid_amount != order.amount_vnd:
-            return Response(
-                {"ok": 0, "error": "AMOUNT_NOT_MATCH"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # 5. Cập nhật order thành PAID
-        order.status = MembershipOrder.Status.PAID
-        order.bank_ref = bank_ref
-        order.paid_at = timezone.now()
-        order.save(update_fields=["status", "bank_ref", "paid_at"])
-
-        # 6. Gán role AGENT cho user qua bảng UserRole
-        try:
-            # 👉 Ở đây dùng role_name, KHÔNG dùng code
-            agent_role = Role.objects.get(role_name="AGENT")
-        except Role.DoesNotExist:
-            return Response(
-                {"ok": 0, "error": "AGENT_ROLE_NOT_FOUND"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        user = order.user
-
-        UserRole.objects.get_or_create(
-            user=user,
-            role=agent_role,
-        )
-
-        return Response(
-            {
-                "ok": 1,
-                "message": "UPGRADED_TO_AGENT",
                 "user_id": user.id,
-                "order_id": order.id,
+                "plan_code": order.plan.code,
+                "status": order.status,
+                "paid_at": order.paid_at,
+                "expired_at": getattr(membership, "expired_at", None),
             },
             status=status.HTTP_200_OK,
         )
@@ -296,6 +191,7 @@ class MembershipOrderPagination(PageNumberPagination):
     page_size_query_param = "page_size"
     max_page_size = 100
 
+
 class MembershipOrderListAPIView(ListAPIView):
     """
     GET /api/accounts/membership/orders/
@@ -303,7 +199,7 @@ class MembershipOrderListAPIView(ListAPIView):
         &search=...
         &page=1&page_size=20
 
-    -> Dùng cho màn admin list yêu cầu nâng cấp.
+    -> Dùng cho màn admin list yêu cầu nâng cấp (list giao dịch).
     """
 
     permission_classes = [IsAuthenticated, IsAdminUser]

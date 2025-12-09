@@ -23,6 +23,11 @@ PERM_DEFS = [
     ("post.approve",         "Duyệt bài đăng",                       "Duyệt cho bài hiển thị"),
     ("post.reject",          "Từ chối bài đăng",                     "Từ chối bài vi phạm"),
 
+    # 🔥 Thêm các quyền liên quan VIP / BUMP / AUTO APPROVE
+    ("post.create_vip",      "Tạo / nâng cấp bài VIP",               "Cho phép đánh dấu / nâng cấp tin thành VIP"),
+    ("post.bump",            "Đẩy tin / bump tin",                   "Cho phép đẩy bài đăng lên trên danh sách"),
+    ("post.auto_approve",    "Tự động duyệt bài đăng",               "Cho phép bài được duyệt tự động khi tạo"),
+
     ("user.view",            "Xem danh sách người dùng",             "Dùng cho admin/staff"),
     ("user.manage",          "Quản lý người dùng",                   "Khóa/mở khóa, gán role"),
 
@@ -45,12 +50,26 @@ ROLE_PERMS_MAP = {
         "user.view",
         "user.manage",
         "report.view",
+
+        # Cho STAFF toàn quyền test & thao tác với VIP/bump
+        "post.create",
+        "post.create_vip",
+        "post.bump",
+        "post.auto_approve",
+        "post.update_own",
+        "post.delete_soft_own",
     ],
 
     "AGENT": [
         "post.create",
         "post.update_own",
         "post.delete_soft_own",
+
+        # 💎 Chỉ AGENT (và STAFF/SUPER_ADMIN) có mấy quyền này
+        "post.create_vip",
+        "post.bump",
+        "post.auto_approve",
+
         "favorite.use",
         "comment.create",
     ],
@@ -59,6 +78,8 @@ ROLE_PERMS_MAP = {
         "post.create",
         "post.update_own",
         "post.delete_soft_own",
+
+        # ❌ Không có create_vip, bump, auto_approve
         "favorite.use",
         "comment.create",
     ],

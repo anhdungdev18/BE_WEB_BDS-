@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
-
+import cloudinary
 from pathlib import Path
 import os
 from dotenv import load_dotenv
@@ -17,16 +17,14 @@ load_dotenv()
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-7io#yz)i!&h98o!48rcet@j(^+n@f7_yiuq&1(0ksaiylzqxps'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+DEBUG = os.getenv("DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = ["*"]
 
@@ -51,6 +49,10 @@ INSTALLED_APPS = [
     "accounts",
     "listings.apps.ListingsConfig",
     "engagement.apps.EngagementConfig",
+    # Cloudinary
+    "cloudinary",
+    "cloudinary_storage",
+
 ]
 
 MIDDLEWARE = [
@@ -195,3 +197,22 @@ VIETQR_BANK_ID = "vcb"             # ví dụ Vietcombank, đổi theo bank củ
 VIETQR_ACCOUNT_NO = "1028424979"   # STK nhận tiền
 VIETQR_ACCOUNT_NAME = "Tran Anh Dung"  # tên chủ tài khoản
 VIETQR_TEMPLATE = "compact2"       # giao diện QR
+
+# ===== CLOUDINARY =====
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.getenv("CLOUDINARY_CLOUD_NAME"),
+    "API_KEY": os.getenv("CLOUDINARY_API_KEY"),
+    "API_SECRET": os.getenv("CLOUDINARY_API_SECRET"),
+}
+
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
+cloudinary.config(
+    cloud_name=CLOUDINARY_STORAGE["CLOUD_NAME"],
+    api_key=CLOUDINARY_STORAGE["API_KEY"],
+    api_secret=CLOUDINARY_STORAGE["API_SECRET"],
+)
+ 
+# MEDIA_URL vẫn để vậy cho FE dễ dùng (thực ra ảnh load từ Cloudinary)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

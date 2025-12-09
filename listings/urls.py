@@ -6,6 +6,7 @@ from listings.views.post_api import (
     PostDetailView,
     PostStatusChangeView,
     OwnerPostListView,
+    PostBumpView,
 )
 
 urlpatterns = [
@@ -24,4 +25,5 @@ urlpatterns = [
         OwnerPostListView.as_view(),
         name="owner-posts",
     ),
+    path("posts/<str:post_id>/bump", PostBumpView.as_view(), name="post-bump"),
 ]

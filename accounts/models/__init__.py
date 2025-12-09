@@ -6,7 +6,7 @@ from .user_role import UserRole
 from .user_action_history import UserActionHistory   
 from .membership_plan import MembershipPlan
 from .membership_order import MembershipOrder
-
+from .user_membership import UserMembership
 __all__ = [
     'User',
     'Permission',
@@ -16,4 +16,5 @@ __all__ = [
     'UserActionHistory',   
     'MembershipPlan',
     'MembershipOrder',
+    'UserMembership',
 ]

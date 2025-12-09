@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..serializers import RegisterSerializer, UserSerializer
+from accounts.models.permission import Permission  # 👈 THÊM DÒNG NÀY
 
 User = get_user_model()
 
@@ -55,7 +56,6 @@ def signup(request):
     )
 
 
-
 # --- Login (JWT, có thể dùng username hoặc email) ---
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -69,6 +69,7 @@ def login(request):
 
     Trả về:
     - user: thông tin người dùng
+    - roles, perms, is_agent: thông tin phân quyền
     - access: JWT access token
     - refresh: JWT refresh token
     """
@@ -111,13 +112,34 @@ def login(request):
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    # ✅ Tạo JWT tokens
+    # ✅ LẤY ROLE & PERMISSION CỦA USER
+    roles_qs = user.roles.all()  # ManyToMany User -> Role
+    role_names = list(roles_qs.values_list("role_name", flat=True))
+
+    perm_codes = list(
+        Permission.objects.filter(roles__in=roles_qs)
+        .values_list("code", flat=True)
+        .distinct()
+    )
+
+    is_agent = "AGENT" in role_names
+
+    # ✅ Tạo JWT tokens và NHÉT THÊM CLAIMS
     refresh = RefreshToken.for_user(user)
+
+    # Gắn thêm thông tin vào token (cả refresh và access sẽ cùng có)
+    refresh["roles"] = role_names
+    refresh["perms"] = perm_codes
+    refresh["is_agent"] = is_agent
+
     access = refresh.access_token
 
     return Response(
         {
             "user": UserSerializer(user).data,
+            "roles": role_names,      # echo ra cho FE dùng luôn
+            "perms": perm_codes,
+            "is_agent": is_agent,
             "access": str(access),
             "refresh": str(refresh),
         },

@@ -33,28 +33,35 @@ def _fetch_one_json(cursor) -> Optional[Dict[str, Any]]:
 # ========== CREATE ==========
 def sp_post_create(
     actor_id: str,
+    is_agent: int,  # 1 = AGENT, 0 = MEMBER/khác
     title: str,
     description: str,
     address_json: Dict[str, Any],
     location_json: Dict[str, Any],
     details_json: Dict[str, Any],
-    other_info_json: Dict[str, Any],
+    other_info_json: Optional[Dict[str, Any]],
     area: float,
     price: float,
     post_type_id: int,
     category_id: int,
 ) -> Dict[str, Any]:
+    """
+    Gọi SP sp_post_create với thêm tham số is_agent.
+    LƯU Ý: Thứ tự tham số phải khớp với định nghĩa SP trong MySQL:
+        (p_actor_id, p_is_agent, p_title, p_description, ...)
+    """
     with connection.cursor() as cur:
         cur.callproc(
             "sp_post_create",
             [
                 actor_id,
+                is_agent,
                 title,
                 description,
                 json.dumps(address_json),
                 json.dumps(location_json),
                 json.dumps(details_json),
-                json.dumps(other_info_json),
+                json.dumps(other_info_json) if other_info_json is not None else None,
                 area,
                 price,
                 post_type_id,
@@ -221,6 +228,8 @@ def sp_posts_count(
         if not data:
             return 0
         return int(data.get("total", 0))
+
+
 def sp_posts_by_owner(
     owner_id: str,
     only_public: int = 1,

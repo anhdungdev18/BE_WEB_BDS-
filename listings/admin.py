@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Post, PostType, Category, ApprovalStatus, PostStatus, PostHistory
+from .models import Post, PostType, Category, ApprovalStatus, PostStatus, PostHistory, PostImage
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
@@ -88,3 +88,12 @@ class PostHistoryAdmin(admin.ModelAdmin):
     list_select_related = ('post',)
     autocomplete_fields = ('post',)
     ordering = ('-timestamp',)
+
+@admin.register(PostImage)
+class PostImageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'post', 'created_at')
+    search_fields = ('post__title',)
+    list_filter = ('created_at',)
+    list_select_related = ('post',)
+    autocomplete_fields = ('post',)
+    ordering = ('-created_at',)
