@@ -20,7 +20,7 @@ from accounts.utils.vietqr import build_vietqr_url
 from accounts.serializers import MembershipOrderListSerializer
 
 from accounts.services.membership_services import (
-    mark_order_paid_and_activate,
+    mark_order_paid_and_activate, get_active_membership
 )
 
 
@@ -230,3 +230,47 @@ class MembershipOrderListAPIView(ListAPIView):
             )
 
         return qs.order_by("-created_at")
+class MembershipMeAPIView(APIView):
+    """
+    GET /api/accounts/membership/me/
+
+    Trả về trạng thái VIP hiện tại của user đang đăng nhập:
+    {
+      "is_vip": true/false,
+      "plan_code": "AGENT_1M",
+      "plan_name": "VIP 1 tháng",
+      "started_at": "...",
+      "expired_at": "...",
+      "remaining_days": 12
+    }
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+
+        # Hàm này vừa check hết hạn, vừa tự tắt AGENT nếu expired
+        mem = get_active_membership(user)
+
+        if mem is None:
+            data = {
+                "is_vip": False,
+                "plan_code": None,
+                "plan_name": None,
+                "started_at": None,
+                "expired_at": None,
+                "remaining_days": 0,
+            }
+        else:
+            plan = mem.plan
+            data = {
+                "is_vip": True,
+                "plan_code": plan.code if plan else None,
+                "plan_name": plan.name if plan else None,
+                "started_at": mem.started_at,
+                "expired_at": mem.expired_at,
+                "remaining_days": mem.remaining_days(),
+            }
+
+        return Response(data)

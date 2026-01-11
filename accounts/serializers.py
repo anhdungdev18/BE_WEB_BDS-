@@ -281,3 +281,17 @@ class MembershipOrderListSerializer(serializers.ModelSerializer):
 
     def get_user_username(self, obj):
         return getattr(obj.user, "username", None)
+class MeSerializer(serializers.ModelSerializer):
+    anh_dai_dien_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "anh_dai_dien_url"]
+
+    def get_anh_dai_dien_url(self, obj):
+        if not obj.anh_dai_dien:
+            return None
+        try:
+            return obj.anh_dai_dien.url
+        except Exception:
+            return None

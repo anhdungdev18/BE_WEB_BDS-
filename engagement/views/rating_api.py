@@ -70,3 +70,40 @@ class RatingListByPostAPIView(APIView):
 
         items = sp_eng_ratings_by_post(post_id=post_id)
         return Response(items, status=status.HTTP_200_OK)
+class RatingSummaryAPIView(APIView):
+    """
+    GET /api/engagement/ratings/summary/?post_id=
+        -> {post_id, avg_score, rating_count, breakdown}
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        post_id = request.query_params.get("post_id")
+        if not post_id:
+            return Response({"detail": "Thiếu post_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        items = sp_eng_ratings_by_post(post_id=post_id)  # score đã là "score" theo SP của huynh
+        breakdown = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+
+        scores = []
+        for r in items:
+            try:
+                s = int(r.get("score"))
+                if 1 <= s <= 5:
+                    scores.append(s)
+                    breakdown[str(s)] += 1
+            except Exception:
+                pass
+
+        rating_count = len(scores)
+        avg_score = round(sum(scores) / rating_count, 2) if rating_count else 0
+
+        return Response(
+            {
+                "post_id": post_id,
+                "avg_score": avg_score,
+                "rating_count": rating_count,
+                "breakdown": breakdown,
+            },
+            status=status.HTTP_200_OK,
+        )

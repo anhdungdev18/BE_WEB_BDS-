@@ -24,7 +24,10 @@ from accounts.views.membership import (
     MembershipUpgradeInitAPIView,
     MembershipOrderMarkPaidAPIView,
     MembershipOrderListAPIView,
+    MembershipMeAPIView
 )
+from accounts.views.password_reset_api import PasswordForgotAPIView, PasswordResetAPIView
+from .views.avatar_api import MeAvatarView
 app_name = "accounts"
 
 urlpatterns = [
@@ -98,4 +101,12 @@ urlpatterns = [
         MembershipOrderListAPIView.as_view(),
         name="membership-order-list",
     ),
+    path(
+        "membership/me/",  
+        MembershipMeAPIView.as_view(),
+        name="membership-me",    ),
+    # ================== PASSWORD RESET ==================
+    path("password/forgot/", PasswordForgotAPIView.as_view(), name="password-forgot"),
+    path("password/reset/", PasswordResetAPIView.as_view(), name="password-reset"),
+    path("me/avatar/", MeAvatarView.as_view(), name="me-avatar"),
 ]

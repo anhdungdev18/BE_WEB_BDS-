@@ -7,6 +7,7 @@ from .user_action_history import UserActionHistory
 from .membership_plan import MembershipPlan
 from .membership_order import MembershipOrder
 from .user_membership import UserMembership
+from .password_reset_token import PasswordResetToken
 __all__ = [
     'User',
     'Permission',
@@ -17,4 +18,5 @@ __all__ = [
     'MembershipPlan',
     'MembershipOrder',
     'UserMembership',
+    'PasswordResetToken',
 ]

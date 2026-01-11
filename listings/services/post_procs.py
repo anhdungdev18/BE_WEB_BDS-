@@ -4,7 +4,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from django.db import connection
-
+from .db_utils import dictfetchall
 
 def _fetch_all_json(cursor) -> List[Dict[str, Any]]:
     rows = cursor.fetchall()
@@ -232,22 +232,54 @@ def sp_posts_count(
 
 def sp_posts_by_owner(
     owner_id: str,
-    only_public: int = 1,
-    page: int = 1,
-    page_size: int = 20,
+    only_public: int,
+    page: int,
+    page_size: int,
+    category_id=None,
+    post_type_id=None,
+    sort: str = "newest",
 ):
-    """
-    Lấy danh sách bài của 1 owner_id (dùng cho public page, profile, my posts).
-    only_public = 1 -> chỉ bài đã Approved + Published
-    """
-    with connection.cursor() as cur:
-        cur.callproc(
+    with connection.cursor() as cursor:
+        cursor.callproc(
             "sp_posts_by_owner",
-            [
-                owner_id,
-                only_public,
-                page,
-                page_size,
-            ],
+            [owner_id, only_public, category_id, post_type_id, sort, page, page_size],
         )
-        return _fetch_all_json(cur)
+        rows = dictfetchall(cursor)
+
+    items = []
+    for r in rows:
+        val = r.get("result")
+        if isinstance(val, str):
+            try:
+                items.append(json.loads(val))
+            except Exception:
+                pass
+        elif isinstance(val, dict):
+            items.append(val)
+    return items
+
+
+def sp_posts_by_owner_count(
+    owner_id: str,
+    only_public: int,
+    category_id=None,
+    post_type_id=None,
+) -> int:
+    with connection.cursor() as cursor:
+        cursor.callproc(
+            "sp_posts_by_owner_count",
+            [owner_id, only_public, category_id, post_type_id],
+        )
+        rows = dictfetchall(cursor)
+    if not rows:
+        return 0
+    try:
+        return int(rows[0].get("total", 0))
+    except Exception:
+        return 0
+
+def sp_post_owner_change_status(post_id: str, actor_id: str, post_status_id: int) -> dict:
+    with connection.cursor() as cursor:
+        cursor.callproc("sp_post_owner_change_status", [post_id, actor_id, post_status_id])
+        rows = dictfetchall(cursor)
+    return rows[0] if rows else None

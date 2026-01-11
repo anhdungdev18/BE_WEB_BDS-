@@ -7,7 +7,12 @@ from listings.views.post_api import (
     PostStatusChangeView,
     OwnerPostListView,
     PostBumpView,
+    MyPostListView,
+    OwnerPostStatusChangeView,
+
 )
+from .views.category import CategoryListAPIView
+from .views.post_type import PostTypeListAPIView
 
 urlpatterns = [
     # /api/listings/posts
@@ -26,4 +31,14 @@ urlpatterns = [
         name="owner-posts",
     ),
     path("posts/<str:post_id>/bump", PostBumpView.as_view(), name="post-bump"),
+    path("categories/", CategoryListAPIView.as_view(), name="category-list"),
+    path("post-types/", PostTypeListAPIView.as_view(), name="posttype-list"),
+    path("me/posts", MyPostListView.as_view(), name="my-posts"),
+    
+    path(
+        "posts/<str:post_id>/owner-status",
+        OwnerPostStatusChangeView.as_view(),
+        name="post-owner-status-change",
+    )
+
 ]

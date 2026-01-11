@@ -16,18 +16,27 @@ class User(AbstractUser):
         max_length=255, unique=True,
         error_messages={"unique": "Email này đã được sử dụng."},
     )
+
     cccd_number   = models.CharField(max_length=12, blank=True, null=True)
     so_dien_thoai = models.CharField(max_length=30, blank=True, null=True)
-    anh_dai_dien  = models.TextField(blank=True, null=True)
+
+    # ✅ Avatar: ImageField (sẽ upload lên Cloudinary vì DEFAULT_FILE_STORAGE)
+    anh_dai_dien  = models.ImageField(
+        upload_to="avatars/",
+        blank=True,
+        null=True,
+        max_length=500,  # để an toàn nếu path/url dài
+    )
+
     address       = models.CharField(max_length=255, null=True, blank=True)
     da_xac_minh   = models.BooleanField(default=False)
     ngay_tao      = models.DateTimeField(auto_now_add=True)
     ngay_cap_nhat = models.DateTimeField(auto_now=True)
     bio           = models.TextField(null=True, blank=True)
+
     is_active     = models.BooleanField(default=True)
     is_staff      = models.BooleanField(default=False)
 
-    # M2M qua bảng trung gian user_role (giữ logic cũ)
     roles = models.ManyToManyField(
         "accounts.Role",
         through="accounts.UserRole",
@@ -42,7 +51,3 @@ class User(AbstractUser):
         if not self.id:
             self.id = generate_unique_id(User)
         super().save(*args, **kwargs)
-
-    class Meta:
-        # db_table = "polls_user"   # giữ nguyên bảng cũ
-        pass 

@@ -18,3 +18,7 @@ requests==2.32.5
 PyJWT==2.10.1
 google-auth==2.35.0
 google-auth-oauthlib==1.2.1
+cloudinary==1.41.0
+django-cloudinary-storage==0.3.0
+Pillow>=11.0.0
+chromadb==0.4.3       # nếu huynh dùng vector search

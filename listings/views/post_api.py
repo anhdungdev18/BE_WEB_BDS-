@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from listings.services.bump_services import bump_post_for_request
-
+from listings.services.auth_helpers import get_actor_id, get_is_admin_flag, has_perm
 from listings.services import post_procs
 from listings.services.auth_helpers import (
     get_actor_id,
@@ -16,10 +16,10 @@ from listings.services.auth_helpers import (
     has_perm,
     is_agent,
 )
-
+from listings.models import Post, PostStatus, ApprovalStatus
 from listings.models import Post, PostImage
 from listings.serializers import PostImageSerializer
-
+from django.shortcuts import get_object_or_404
 
 def _to_int(value: Optional[str]):
     if value in [None, ""]:
@@ -61,6 +61,7 @@ class PostListCreateView(APIView):
     """
     GET: search posts (public)
     POST: create post (user có perm 'post.create') + upload images
+          + gắn cờ owner_is_agent cho bài đăng (VIP/AGENT)
     """
 
     parser_classes = [JSONParser, FormParser, MultiPartParser]
@@ -70,6 +71,7 @@ class PostListCreateView(APIView):
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
+    # ================== GET: SEARCH POSTS ==================
     def get(self, request, *args, **kwargs):
         params = request.query_params
 
@@ -155,6 +157,7 @@ class PostListCreateView(APIView):
             }
         )
 
+    # ================== POST: CREATE POST ==================
     def post(self, request, *args, **kwargs):
         # 1) Check đăng nhập
         if not request.user.is_authenticated:
@@ -178,6 +181,7 @@ class PostListCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # is_agent_flag = 1 nếu user hiện tại đang có role AGENT (VIP)
         is_agent_flag = 1 if is_agent(request) else 0
         data = request.data
 
@@ -200,7 +204,11 @@ class PostListCreateView(APIView):
                     "message": (
                         "Bạn chỉ được upload tối đa "
                         f"{max_images} ảnh cho mỗi bài đăng "
-                        + ("(AGENT: 10, MEMBER: 6)." if max_images == 10 else "(MEMBER: 6).")
+                        + (
+                            "(AGENT: 10, MEMBER: 6)."
+                            if max_images == 10
+                            else "(MEMBER: 6)."
+                        )
                     ),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -277,13 +285,19 @@ class PostListCreateView(APIView):
             # Trường hợp hiếm: SP không trả id nhưng cũng không báo ok=0
             return Response(result, status=status.HTTP_201_CREATED)
 
-        # ====== TẠO ẢNH (PostImage) CHO BÀI VỪA TẠO ======
+        # ====== LẤY BÀI VỪA TẠO ======
         try:
             post = Post.objects.get(id=post_id)
         except Post.DoesNotExist:
+            # vẫn trả result (JSON từ SP), chỉ là không gắn được ảnh
             return Response(result, status=status.HTTP_201_CREATED)
 
-        # Dùng lại valid_files đã lấy ở trên (đã check limit)
+        # 🔥 NEW: gắn cờ VIP/AGENT cho bài đăng (snapshot tại thời điểm đăng)
+        # cần field owner_is_agent = models.BooleanField(default=False) trong model Post
+        post.owner_is_agent = bool(is_agent_flag)
+        post.save(update_fields=["owner_is_agent"])
+
+        # ====== TẠO ẢNH (PostImage) CHO BÀI VỪA TẠO ======
         for f in valid_files:
             PostImage.objects.create(post=post, image=f)
 
@@ -298,15 +312,26 @@ class PostListCreateView(APIView):
 
         return Response(result, status=status.HTTP_201_CREATED)
 
+
 class PostDetailView(APIView):
     """
-    GET: chi tiết post + danh sách ảnh
+    GET: public (không bị 401 kể cả client gửi token rác)
     PATCH: update (owner hoặc admin-like) + thêm/xoá ảnh
     DELETE: soft delete (owner hoặc admin-like)
     """
-
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     parser_classes = [JSONParser, FormParser, MultiPartParser]
+
+    # ✅ GET: bỏ qua authenticator để không bị SimpleJWT chặn khi Authorization token sai
+    def get_authenticators(self):
+        if self.request.method == "GET":
+            return []
+        return super().get_authenticators()
+
+    # ✅ GET public; PATCH/DELETE cần login
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
 
     def get(self, request, post_id: str, *args, **kwargs):
         data = post_procs.sp_post_get_json(post_id)
@@ -331,6 +356,7 @@ class PostDetailView(APIView):
         return Response(data)
 
     def patch(self, request, post_id: str, *args, **kwargs):
+        # IsAuthenticated đã chặn trước, nhưng giữ lại cũng OK
         if not request.user.is_authenticated:
             return Response(
                 {"detail": "Authentication required"},
@@ -340,7 +366,7 @@ class PostDetailView(APIView):
         actor_id = get_actor_id(request)
         is_admin_flag = get_is_admin_flag(request)
 
-        # SUPER_ADMIN / STAFF được sửa mọi bài (SP xem p_is_admin=1).
+        # SUPER_ADMIN / STAFF được sửa mọi bài
         # AGENT / MEMBER: cần perm post.update_own, SP kiểm tra chính chủ.
         if not is_admin_flag:
             if not has_perm(request, "post.update_own"):
@@ -356,25 +382,17 @@ class PostDetailView(APIView):
 
         # ---- Parse JSON fields (nếu field có trong request) ----
         try:
-            address_json = _parse_json_field(
-                data, "address", default=None, allow_missing=True
-            )
-            location_json = _parse_json_field(
-                data, "location", default=None, allow_missing=True
-            )
-            details_json = _parse_json_field(
-                data, "details", default=None, allow_missing=True
-            )
-            other_info_json = _parse_json_field(
-                data, "other_info", default=None, allow_missing=True
-            )
+            address_json = _parse_json_field(data, "address", default=None, allow_missing=True)
+            location_json = _parse_json_field(data, "location", default=None, allow_missing=True)
+            details_json  = _parse_json_field(data, "details",  default=None, allow_missing=True)
+            other_info_json = _parse_json_field(data, "other_info", default=None, allow_missing=True)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         area = _to_float(str(data["area"])) if "area" in data else None
         price = _to_float(str(data["price"])) if "price" in data else None
         post_type_id = _to_int(data.get("post_type_id")) if "post_type_id" in data else None
-        category_id = _to_int(data.get("category_id")) if "category_id" in data else None
+        category_id  = _to_int(data.get("category_id")) if "category_id" in data else None
 
         # ====== GỌI SP UPDATE BÀI ======
         result = post_procs.sp_post_update(
@@ -429,9 +447,7 @@ class PostDetailView(APIView):
             if not f:
                 continue
             img = PostImage.objects.create(post=post, image=f)
-            new_images.append(
-                PostImageSerializer(img, context={"request": request}).data
-            )
+            new_images.append(PostImageSerializer(img, context={"request": request}).data)
 
         # 3) Trả lại result + danh sách ảnh hiện tại
         all_images = PostImageSerializer(
@@ -447,6 +463,7 @@ class PostDetailView(APIView):
         return Response(result)
 
     def delete(self, request, post_id: str, *args, **kwargs):
+        # IsAuthenticated đã chặn trước, nhưng giữ lại cũng OK
         if not request.user.is_authenticated:
             return Response(
                 {"detail": "Authentication required"},
@@ -456,7 +473,7 @@ class PostDetailView(APIView):
         actor_id = get_actor_id(request)
         is_admin_flag = get_is_admin_flag(request)
 
-        # SUPER_ADMIN/STAFF: cho phép xóa mọi bài (SP kiểm tra p_is_admin=1).
+        # SUPER_ADMIN/STAFF: cho phép xóa mọi bài
         # AGENT/MEMBER: cần perm post.delete_soft_own + chính chủ.
         if not is_admin_flag:
             if not has_perm(request, "post.delete_soft_own"):
@@ -475,7 +492,6 @@ class PostDetailView(APIView):
             return Response(result, status=status.HTTP_403_FORBIDDEN)
 
         return Response(result, status=status.HTTP_200_OK)
-
 
 class PostStatusChangeView(APIView):
     """
@@ -550,12 +566,12 @@ class PostStatusChangeView(APIView):
 
 class OwnerPostListView(APIView):
     """
-    GET /api/listings/owner-posts/?owner_id=&page=&page_size=&only_public=
+    PUBLIC: Xem bài đăng của 1 user bất kỳ
+
+    GET /api/listings/owner-posts/?owner_id=&page=&page_size=
 
     - Ai cũng xem được (AllowAny)
-    - Dùng để:
-        + Trang cá nhân public của user khác
-        + Trang my-posts của chính mình (FE tự truyền owner_id = id của mình)
+    - Luôn chỉ trả bài public/đã duyệt
     """
 
     permission_classes = [permissions.AllowAny]
@@ -565,16 +581,13 @@ class OwnerPostListView(APIView):
 
         owner_id = params.get("owner_id")
         if not owner_id:
-            return Response(
-                {"detail": "owner_id is required"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({"detail": "owner_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         page = _to_int(params.get("page")) or 1
         page_size = _to_int(params.get("page_size")) or 20
 
-        only_public_raw = params.get("only_public", "1")
-        only_public = 1 if only_public_raw in ["1", "true", "True"] else 0
+        # ✅ luôn public
+        only_public = 1
 
         items = post_procs.sp_posts_by_owner(
             owner_id=owner_id,
@@ -584,23 +597,13 @@ class OwnerPostListView(APIView):
         )
 
         # ===== GẮN ẢNH CHO TỪNG POST =====
-        post_ids = [
-            item["id"]
-            for item in items
-            if isinstance(item, dict) and "id" in item
-        ]
+        post_ids = [item["id"] for item in items if isinstance(item, dict) and "id" in item]
 
         image_map = {}
         if post_ids:
-            images_qs = PostImage.objects.filter(
-                post_id__in=post_ids
-            ).order_by("created_at")
-
+            images_qs = PostImage.objects.filter(post_id__in=post_ids).order_by("created_at")
             for img in images_qs:
-                data = PostImageSerializer(
-                    img,
-                    context={"request": request},
-                ).data
+                data = PostImageSerializer(img, context={"request": request}).data
                 key = str(img.post_id)
                 image_map.setdefault(key, []).append(data)
 
@@ -610,14 +613,9 @@ class OwnerPostListView(APIView):
                 item["images"] = image_map.get(pid, [])
 
         return Response(
-            {
-                "page": page,
-                "page_size": page_size,
-                "results": items,
-            },
+            {"page": page, "page_size": page_size, "results": items},
             status=status.HTTP_200_OK,
         )
-
 class PostBumpView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -640,6 +638,172 @@ class PostBumpView(APIView):
             )
 
         if result.get("ok") == 0:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result, status=status.HTTP_200_OK)
+class MyPostListView(APIView):
+    """
+    GET /api/listings/me/posts?category_id=&post_type_id=&sort=&page=&page_size=
+    - Auth required
+    - Trả tất cả bài của mình (kể cả ẩn), trừ is_deleted=1
+    - Lọc + phân trang ở DB
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        owner_id = str(request.user.id)
+
+        page = _to_int(request.query_params.get("page")) or 1
+        page_size = _to_int(request.query_params.get("page_size")) or 12
+
+        category_id = _to_int(request.query_params.get("category_id"))
+        post_type_id = _to_int(request.query_params.get("post_type_id"))
+
+        sort = (request.query_params.get("sort") or "newest").lower()
+        if sort not in ("newest", "oldest"):
+            sort = "newest"
+
+        only_public = 0  # ✅ của mình => lấy tất cả
+
+        total = post_procs.sp_posts_by_owner_count(
+            owner_id=owner_id,
+            only_public=only_public,
+            category_id=category_id,
+            post_type_id=post_type_id,
+        )
+
+        items = post_procs.sp_posts_by_owner(
+            owner_id=owner_id,
+            only_public=only_public,
+            category_id=category_id,
+            post_type_id=post_type_id,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+        )
+
+        # gắn images
+        post_ids = [it["id"] for it in items if isinstance(it, dict) and "id" in it]
+        image_map = {}
+        if post_ids:
+            images_qs = PostImage.objects.filter(post_id__in=post_ids).order_by("created_at")
+            for img in images_qs:
+                data = PostImageSerializer(img, context={"request": request}).data
+                image_map.setdefault(str(img.post_id), []).append(data)
+
+        for it in items:
+            if isinstance(it, dict):
+                it["images"] = image_map.get(str(it.get("id")), [])
+
+        return Response(
+            {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "results": items,
+            },
+            status=status.HTTP_200_OK,
+        )
+class OwnerPostStatusChangeView(APIView):
+    """
+    PATCH /api/listings/posts/<post_id>/owner-status
+    Body: { "post_status_id": 1 }
+
+    - Owner đổi post_status (ẩn/hiện/đã bán/đã cho thuê...)
+    - Không được đổi approval_status (duyệt/từ chối)
+    - Admin-like cũng có thể dùng
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    # ✅ chỉ cho phép đổi các trạng thái này (đúng theo DB huynh)
+    ALLOWED_STATUS_NAMES = {"Published", "Hidden", "Sold", "Rented"}
+
+    def patch(self, request, post_id: str, *args, **kwargs):
+        actor_id = get_actor_id(request)          # id user hiện tại
+        is_admin_flag = get_is_admin_flag(request)
+
+        data = request.data
+
+        # ❌ Không cho đụng approval_status
+        if "approval_status_id" in data:
+            return Response(
+                {"detail": "Owner không được đổi approval_status (duyệt/từ chối)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        post_status_id = _to_int(data.get("post_status_id"))
+        if not post_status_id:
+            return Response(
+                {"detail": "post_status_id là bắt buộc"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 1) Lấy post và check quyền/chính chủ (nếu không phải admin)
+        post = get_object_or_404(Post, pk=post_id)
+
+        if not is_admin_flag:
+            if not has_perm(request, "post.update_own"):
+                return Response(
+                    {"detail": "Không có quyền sửa bài của mình (post.update_own)"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if str(post.owner_id) != str(actor_id):
+                return Response(
+                    {"detail": "Không phải chủ bài đăng"},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        # 2) Validate status tồn tại + nằm trong whitelist
+        st = PostStatus.objects.filter(id=post_status_id).first()
+        if not st:
+            return Response(
+                {"detail": "post_status_id không tồn tại"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if st.name not in self.ALLOWED_STATUS_NAMES:
+            return Response(
+                {
+                    "detail": f"post_status '{st.name}' không được phép. "
+                              f"Chỉ cho phép: {sorted(self.ALLOWED_STATUS_NAMES)}"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 3) Chặn Published nếu chưa Approved (khuyến nghị)
+        if st.name == "Published":
+            approved = ApprovalStatus.objects.filter(name__iexact="Approved").first()
+            if approved and getattr(post, "approval_status_id", None) != approved.id:
+                return Response(
+                    {"detail": "Bài chưa được duyệt (Approved) nên không thể Published"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # 4) ✅ Gọi SP OWNER (không phải sp_post_change_status)
+        # - Nếu admin-like thì có thể cho bypass owner check,
+        #   nhưng SP owner đang check owner_id, nên:
+        #   -> admin dùng API admin-status riêng (PostStatusChangeView)
+        #   -> API này ưu tiên cho owner
+        result = post_procs.sp_post_owner_change_status(
+            post_id=post_id,
+            actor_id=str(actor_id),
+            post_status_id=post_status_id,
+        )
+
+        # Nếu service trả về dạng {'result': '...json...'} thì parse lại tùy dictfetch của huynh
+        # Ở đây assume service trả dict luôn như: {"ok":1,...} hoặc {"error":"..."}
+        if not result:
+            return Response(
+                {"id": post_id, "error": "NOT_ALLOWED_OR_NOT_FOUND"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if result.get("error") == "NOT_ALLOWED_OR_NOT_FOUND":
+            return Response(result, status=status.HTTP_403_FORBIDDEN)
+
+        if result.get("error") in ("POST_STATUS_NOT_FOUND", "CANNOT_PUBLISH_NOT_APPROVED"):
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(result, status=status.HTTP_200_OK)

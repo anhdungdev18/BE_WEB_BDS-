@@ -40,7 +40,8 @@ def activate_membership_for_user(user, plan: MembershipPlan) -> UserMembership:
     )
 
     if not created:
-        membership.plan = plan  # cập nhật gói mới (1M -> 3M chẳng hạn)
+        # Cập nhật gói (ví dụ: từ 1 tháng lên 3 tháng)
+        membership.plan = plan
 
         if membership.expired_at > now:
             # Đang còn hạn → nối thêm thời gian
@@ -69,18 +70,35 @@ def activate_membership_for_user(user, plan: MembershipPlan) -> UserMembership:
 def get_active_membership(user) -> Optional[UserMembership]:
     """
     Lấy membership còn hiệu lực (expired_at > now), nếu không có thì trả None.
+
+    Đồng thời:
+    - Nếu membership tồn tại nhưng ĐÃ HẾT HẠN:
+        + Trả None
+        + Tắt role AGENT (is_active = False) trong UserRole (lazy cleanup).
     """
     mem = getattr(user, "membership", None)
     if not mem:
+        # Không có bản ghi membership → không đụng tới role,
+        # vì có thể admin set AGENT thủ công.
         return None
-    if mem.expired_at <= timezone.now():
+
+    now = timezone.now()
+    if mem.expired_at <= now:
+        # Hết hạn VIP → tắt AGENT cho user (nếu được gán bởi membership)
+        UserRole.objects.filter(
+            user=user,
+            role__role_name="AGENT",
+            is_active=True,
+        ).update(is_active=False)
         return None
+
     return mem
 
 
 def is_vip_account(user) -> bool:
     """
     Helper: user hiện tại có VIP đang hoạt động hay không.
+    (Hàm này cũng sẽ tự động hạ role AGENT nếu membership đã hết hạn.)
     """
     return get_active_membership(user) is not None
 

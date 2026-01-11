@@ -23,7 +23,7 @@ PERM_DEFS = [
     ("post.approve",         "Duyệt bài đăng",                       "Duyệt cho bài hiển thị"),
     ("post.reject",          "Từ chối bài đăng",                     "Từ chối bài vi phạm"),
 
-    # 🔥 Thêm các quyền liên quan VIP / BUMP / AUTO APPROVE
+    # VIP/BUMP/AUTO APPROVE
     ("post.create_vip",      "Tạo / nâng cấp bài VIP",               "Cho phép đánh dấu / nâng cấp tin thành VIP"),
     ("post.bump",            "Đẩy tin / bump tin",                   "Cho phép đẩy bài đăng lên trên danh sách"),
     ("post.auto_approve",    "Tự động duyệt bài đăng",               "Cho phép bài được duyệt tự động khi tạo"),
@@ -38,9 +38,9 @@ PERM_DEFS = [
     ("report.view",          "Xem báo cáo",                          "Xem thống kê hệ thống"),
 ]
 
-# mapping Role -> list permission code
 ROLE_PERMS_MAP = {
-    "SUPER_ADMIN": ["*"],  # full quyền, xử lý đặc biệt trong code
+    # ✅ SUPER_ADMIN: gán tất cả perms (không dùng "*" nữa cho khỏi rối)
+    "SUPER_ADMIN": [code for (code, _, _) in PERM_DEFS],
 
     "STAFF": [
         "post.view_all",
@@ -51,7 +51,7 @@ ROLE_PERMS_MAP = {
         "user.manage",
         "report.view",
 
-        # Cho STAFF toàn quyền test & thao tác với VIP/bump
+        # Cho STAFF test VIP/bump
         "post.create",
         "post.create_vip",
         "post.bump",
@@ -65,7 +65,6 @@ ROLE_PERMS_MAP = {
         "post.update_own",
         "post.delete_soft_own",
 
-        # 💎 Chỉ AGENT (và STAFF/SUPER_ADMIN) có mấy quyền này
         "post.create_vip",
         "post.bump",
         "post.auto_approve",
@@ -79,7 +78,6 @@ ROLE_PERMS_MAP = {
         "post.update_own",
         "post.delete_soft_own",
 
-        # ❌ Không có create_vip, bump, auto_approve
         "favorite.use",
         "comment.create",
     ],
@@ -89,39 +87,58 @@ ROLE_PERMS_MAP = {
 class Command(BaseCommand):
     help = "Seed default roles and permissions for BDS system"
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--reset",
+            action="store_true",
+            help="Xoá toàn bộ RolePermission hiện có rồi seed lại (khuyên dùng khi đổi mapping)",
+        )
+
     def handle(self, *args, **options):
-        # Tạo Permission
+        reset = options.get("reset", False)
+
+        if reset:
+            RolePermission.objects.all().delete()
+            self.stdout.write(self.style.WARNING("RolePermission cleared (--reset)."))
+
+        # 1) Tạo/Update Permission
         perm_objs = {}
         for code, ten_quyen, mo_ta in PERM_DEFS:
-            perm, created = Permission.objects.get_or_create(
+            perm, _created = Permission.objects.get_or_create(
                 code=code,
-                defaults={
-                    "ten_quyen": ten_quyen,
-                    "mo_ta": mo_ta,
-                },
+                defaults={"ten_quyen": ten_quyen, "mo_ta": mo_ta},
             )
+            # nếu muốn update text khi đã tồn tại:
+            if perm.ten_quyen != ten_quyen or perm.mo_ta != mo_ta:
+                perm.ten_quyen = ten_quyen
+                perm.mo_ta = mo_ta
+                perm.save(update_fields=["ten_quyen", "mo_ta"])
             perm_objs[code] = perm
 
-        # Tạo Role
+        # 2) Tạo Role
         role_objs = {}
         for role_name, mo_ta in ROLE_DEFS:
-            role, created = Role.objects.get_or_create(
+            role, _created = Role.objects.get_or_create(
                 role_name=role_name,
                 defaults={"mo_ta": mo_ta},
             )
+            # update mô tả
+            if role.mo_ta != mo_ta:
+                role.mo_ta = mo_ta
+                role.save(update_fields=["mo_ta"])
             role_objs[role_name] = role
 
-        # Gán Permission cho Role (trừ SUPER_ADMIN)
+        # 3) Gán Permission cho Role
         for role_name, perm_codes in ROLE_PERMS_MAP.items():
-            if "*" in perm_codes:
-                continue
-
             role = role_objs[role_name]
+
             for code in perm_codes:
-                perm = perm_objs[code]
-                RolePermission.objects.get_or_create(
-                    role=role,
-                    permission=perm,
-                )
+                perm = perm_objs.get(code)
+                if not perm:
+                    # phòng trường hợp code bị typo
+                    self.stdout.write(self.style.WARNING(f"Permission code not found: {code}"))
+                    continue
+
+                RolePermission.objects.get_or_create(role=role, permission=perm)
 
         self.stdout.write(self.style.SUCCESS("Seed roles & permissions DONE."))

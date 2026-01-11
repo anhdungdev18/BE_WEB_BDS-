@@ -42,6 +42,7 @@ class Post(models.Model):
 
     owner_id = models.CharField(max_length=9)
 
+
     approval_status = models.ForeignKey(
         "listings.ApprovalStatus",
         on_delete=models.SET_NULL,
@@ -63,6 +64,10 @@ class Post(models.Model):
     # Thời điểm "đẩy tin" gần nhất – BE sort theo trường này
     bumped_at = models.DateTimeField(null=True, blank=True)
 
+    owner_is_agent = models.BooleanField(
+        default=False,
+        help_text="Owner là AGENT (VIP) tại thời điểm đăng bài"
+    )
     class Meta:
         indexes = [
             models.Index(fields=["category"]),
