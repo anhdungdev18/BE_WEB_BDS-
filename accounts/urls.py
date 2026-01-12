@@ -51,7 +51,6 @@ urlpatterns = [
     # GET /api/accounts/users              -> danh sách user (admin)
     path("users", AdminUserListAPIView.as_view(), name="admin-user-list"),
 
-    # (tuỳ huynh có xài thì dùng thêm 2 route dưới)
     # GET/PUT /api/accounts/admin/users/<user_id>/profile/
     path(
         "admin/users/<str:user_id>/profile/",

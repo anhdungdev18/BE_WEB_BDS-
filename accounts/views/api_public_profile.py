@@ -11,6 +11,21 @@ from rest_framework import status
 User = get_user_model()
 
 
+def _avatar_url(user):
+    v = getattr(user, "anh_dai_dien", None)
+    if not v:
+        return None
+    try:
+        return v.url
+    except Exception:
+        # fallback nếu trường lưu dạng string/url
+        try:
+            s = str(v)
+            return s if s else None
+        except Exception:
+            return None
+
+
 class PublicUserProfileAPIView(APIView):
     """
     GET /api/accounts/users/<user_id>/public-profile/
@@ -19,14 +34,13 @@ class PublicUserProfileAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, user_id: str):
-        # lấy user theo id (CHAR(9) mà huynh đang dùng)
         user = get_object_or_404(User, pk=user_id)
 
         data = {
             "id": user.id,
             "username": user.username,
             "full_name": getattr(user, "full_name", None),
-            "avatar": getattr(user, "anh_dai_dien", None),
+            "anh_dai_dien": _avatar_url(user),
             "bio": getattr(user, "bio", None),
             "joined_at": user.date_joined,
         }

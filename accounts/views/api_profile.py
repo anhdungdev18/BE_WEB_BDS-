@@ -1,5 +1,6 @@
 # accounts/views/api_profile.py
 
+import json
 from django.contrib.auth.hashers import check_password, make_password
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13,12 +14,40 @@ from accounts.serializers import (
 )
 
 
+def _maybe_load_json(raw):
+    """
+    SP thường trả JSON string. Nếu raw là string JSON -> loads về dict.
+    Nếu raw đã là dict/list -> giữ nguyên.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except Exception:
+            return raw
+    return raw
+
+
 class MeProfileAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        serializer = UserDetailSerializer(request.user)
-        return Response(serializer.data)
+        # Giữ logic hiện tại: dùng serializer
+        data = dict(UserDetailSerializer(request.user).data)
+
+        # Nếu serializer chưa có anh_dai_dien thì bơm thêm từ SP (đúng nguồn FE đang dùng)
+        if "anh_dai_dien" not in data:
+            raw = user_sp.get_user_json(str(request.user.id))
+            sp_obj = _maybe_load_json(raw)
+            if isinstance(sp_obj, dict) and "anh_dai_dien" in sp_obj:
+                data["anh_dai_dien"] = sp_obj.get("anh_dai_dien")
+            else:
+                data["anh_dai_dien"] = None
+
+        return Response(data, status=status.HTTP_200_OK)
 
     def put(self, request):
         serializer = ProfileUpdateSerializer(data=request.data)
@@ -27,7 +56,9 @@ class MeProfileAPIView(APIView):
 
         # chỉ user tự update mình
         result = user_sp.update_own_profile(request.user, serializer.validated_data)
-        return Response(result, status=status.HTTP_200_OK)
+
+        # SP trả JSON string -> parse về dict để FE nhận object có anh_dai_dien
+        return Response(_maybe_load_json(result), status=status.HTTP_200_OK)
 
 
 class ChangePasswordAPIView(APIView):
@@ -38,7 +69,7 @@ class ChangePasswordAPIView(APIView):
       - new_password
       - confirm_password
     """
-    permission_classes = [permissions.IsAuthenticated]   # ✅ Bắt buộc phải đăng nhập
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = ChangePasswordSerializer(
@@ -65,4 +96,4 @@ class ChangePasswordAPIView(APIView):
         except PermissionError as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(_maybe_load_json(result), status=status.HTTP_200_OK)

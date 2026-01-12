@@ -12,6 +12,28 @@ from accounts.models.permission import Permission
 User = get_user_model()
 
 
+def _get_avatar_link(obj):
+    """
+    Trả về link ảnh đại diện an toàn:
+    - Nếu có file (ImageField + storage) => ưu tiên obj.anh_dai_dien.url
+    - Nếu trường đang lưu sẵn URL dạng string => fallback str(obj.anh_dai_dien)
+    - Không có => None
+    """
+    v = getattr(obj, "anh_dai_dien", None)
+    if not v:
+        return None
+    # Ưu tiên url của storage (Cloudinary)
+    try:
+        return v.url
+    except Exception:
+        # Fallback: nếu DB lưu thẳng URL/string
+        try:
+            s = str(v)
+            return s if s else None
+        except Exception:
+            return None
+
+
 class BdsTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     Custom JWT: ngoài thông tin mặc định, thêm:
@@ -24,18 +46,15 @@ class BdsTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
 
-        # Lấy list role của user
-        roles_qs = user.roles.all()  # ManyToMany từ User -> Role
+        roles_qs = user.roles.all()
         role_names = list(roles_qs.values_list("role_name", flat=True))
 
-        # Lấy list permission code (qua RolePermission)
         perm_codes = list(
             Permission.objects.filter(roles__in=roles_qs)
             .values_list("code", flat=True)
             .distinct()
         )
 
-        # Gắn thêm vào payload
         token["roles"] = role_names
         token["perms"] = perm_codes
         token["is_agent"] = "AGENT" in role_names
@@ -51,35 +70,28 @@ class UserSerializer(serializers.ModelSerializer):
     """
     Dùng cho auth_views cũ (trả thông tin user sau khi đăng ký/đăng nhập).
     """
+    anh_dai_dien = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "username", "email"]
+        fields = ["id", "username", "email", "anh_dai_dien"]
+
+    def get_anh_dai_dien(self, obj):
+        return _get_avatar_link(obj)
+
 
 class RegisterSerializer(serializers.Serializer):
-    """
-    Dùng cho API signup (auth_views.signup).
-    - validate(): kiểm tra password + confirm_password
-    - validate_username(): check username trùng
-    - validate_email(): check email trùng
-    - create(): tạo User mới (nếu huynh còn dùng serializer.save())
-    """
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
-    password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
-    confirm_password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    confirm_password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
     def validate_username(self, value):
-        # check username đã tồn tại chưa
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError("Username đã tồn tại.")
         return value
 
     def validate_email(self, value):
-        # check email đã tồn tại chưa
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError("Email đã được sử dụng.")
         return value
@@ -89,25 +101,16 @@ class RegisterSerializer(serializers.Serializer):
         confirm_password = attrs.get("confirm_password")
 
         if password != confirm_password:
-            raise serializers.ValidationError(
-                {"confirm_password": _("Mật khẩu xác nhận không khớp.")}
-            )
+            raise serializers.ValidationError({"confirm_password": _("Mật khẩu xác nhận không khớp.")})
 
-        # validate rule mạnh/yếu của Django
         try:
             validate_password(password)
         except Exception as e:
-            raise serializers.ValidationError(
-                {"password": list(e.messages)}
-            )
+            raise serializers.ValidationError({"password": list(e.messages)})
 
         return attrs
 
     def create(self, validated_data):
-        """
-        (Không bắt buộc nếu huynh đã tự tạo user trong view,
-         nhưng để đây vẫn OK, không ảnh hưởng gì.)
-        """
         username = validated_data.get("username")
         email = validated_data.get("email")
         password = validated_data.get("password")
@@ -129,15 +132,22 @@ class UserBriefSerializer(serializers.ModelSerializer):
     """
     Dùng cho list user, hoặc embed trong các object khác.
     """
+    anh_dai_dien = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "username", "email"]
+        fields = ["id", "username", "email", "anh_dai_dien"]
+
+    def get_anh_dai_dien(self, obj):
+        return _get_avatar_link(obj)
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
     """
     Dùng cho trang Hồ sơ hoặc admin xem chi tiết 1 user.
     """
+    anh_dai_dien = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -152,6 +162,9 @@ class UserDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "email", "is_active"]
 
+    def get_anh_dai_dien(self, obj):
+        return _get_avatar_link(obj)
+
 
 # -------------------------------------------------------------------
 # PROFILE / HỒ SƠ
@@ -161,9 +174,7 @@ class ProfileUpdateSerializer(serializers.Serializer):
     username = serializers.CharField(required=False, allow_blank=True, max_length=150)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=30)
     address = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    bio = serializers.CharField(
-        required=False, allow_blank=True, style={"base_template": "textarea.html"}
-    )
+    bio = serializers.CharField(required=False, allow_blank=True, style={"base_template": "textarea.html"})
     avatar = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -172,10 +183,6 @@ class ProfileUpdateSerializer(serializers.Serializer):
 
 
 class AdminUpdateUserProfileSerializer(ProfileUpdateSerializer):
-    """
-    Admin update profile cho user khác.
-    Tạm thời dùng lại y chang ProfileUpdateSerializer.
-    """
     pass
 
 
@@ -184,60 +191,42 @@ class AdminUpdateUserProfileSerializer(ProfileUpdateSerializer):
 # -------------------------------------------------------------------
 
 class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
-    new_password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
-    confirm_password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
+    old_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    confirm_password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
     def validate(self, attrs):
         new_password = attrs.get("new_password")
         confirm_password = attrs.get("confirm_password")
 
         if new_password != confirm_password:
-            raise serializers.ValidationError(
-                {"confirm_password": _("Mật khẩu xác nhận không khớp.")}
-            )
+            raise serializers.ValidationError({"confirm_password": _("Mật khẩu xác nhận không khớp.")})
 
         user = self.context.get("user")
         try:
             validate_password(new_password, user=user)
         except Exception as e:
-            raise serializers.ValidationError(
-                {"new_password": list(e.messages)}
-            )
+            raise serializers.ValidationError({"new_password": list(e.messages)})
 
         return attrs
 
 
 class AdminResetPasswordSerializer(serializers.Serializer):
-    new_password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
-    confirm_password = serializers.CharField(
-        write_only=True, style={"input_type": "password"}
-    )
+    new_password = serializers.CharField(write_only=True, style={"input_type": "password"})
+    confirm_password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
     def validate(self, attrs):
         new_password = attrs.get("new_password")
         confirm_password = attrs.get("confirm_password")
 
         if new_password != confirm_password:
-            raise serializers.ValidationError(
-                {"confirm_password": _("Mật khẩu xác nhận không khớp.")}
-            )
+            raise serializers.ValidationError({"confirm_password": _("Mật khẩu xác nhận không khớp.")})
 
         user = self.context.get("target_user")
         try:
             validate_password(new_password, user=user)
         except Exception as e:
-            raise serializers.ValidationError(
-                {"new_password": list(e.messages)}
-            )
+            raise serializers.ValidationError({"new_password": list(e.messages)})
 
         return attrs
 
@@ -250,9 +239,13 @@ class UserListFilterSerializer(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True)
     is_active = serializers.BooleanField(required=False, default=True)
     page = serializers.IntegerField(required=False, min_value=1, default=1)
-    page_size = serializers.IntegerField(
-        required=False, min_value=1, max_value=100, default=20
-    )
+    page_size = serializers.IntegerField(required=False, min_value=1, max_value=100, default=20)
+
+
+# -------------------------------------------------------------------
+# MEMBERSHIP (GIỮ NGUYÊN)
+# -------------------------------------------------------------------
+
 class MembershipOrderListSerializer(serializers.ModelSerializer):
     user_email = serializers.SerializerMethodField()
     user_username = serializers.SerializerMethodField()
@@ -281,17 +274,22 @@ class MembershipOrderListSerializer(serializers.ModelSerializer):
 
     def get_user_username(self, obj):
         return getattr(obj.user, "username", None)
+
+
 class MeSerializer(serializers.ModelSerializer):
+    """
+    Giữ để tương thích chỗ nào đó đang dùng anh_dai_dien_url,
+    đồng thời thêm luôn anh_dai_dien (cùng giá trị) để FE thống nhất.
+    """
+    anh_dai_dien = serializers.SerializerMethodField()
     anh_dai_dien_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "anh_dai_dien_url"]
+        fields = ["id", "username", "email", "anh_dai_dien", "anh_dai_dien_url"]
+
+    def get_anh_dai_dien(self, obj):
+        return _get_avatar_link(obj)
 
     def get_anh_dai_dien_url(self, obj):
-        if not obj.anh_dai_dien:
-            return None
-        try:
-            return obj.anh_dai_dien.url
-        except Exception:
-            return None
+        return _get_avatar_link(obj)

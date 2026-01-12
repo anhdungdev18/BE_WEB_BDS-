@@ -1,17 +1,15 @@
 # accounts/views/api_admin_users.py
 
+import json
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
-from django.db.models import Q
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 
 from accounts.serializers import (
-    UserBriefSerializer,
-    UserDetailSerializer,
     UserListFilterSerializer,
     AdminUpdateUserProfileSerializer,
     AdminResetPasswordSerializer,
@@ -20,6 +18,27 @@ from accounts.services import user_sp
 from accounts.services.authz import user_has_perm
 
 User = get_user_model()
+
+
+def _maybe_load_json(raw):
+    """SP có thể trả JSON string; parse về dict/list nếu được."""
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except Exception:
+            return raw
+    return raw
+
+
+def _ensure_avatar_key(obj):
+    """Đảm bảo dict user luôn có key anh_dai_dien (nếu thiếu)."""
+    if isinstance(obj, dict) and "anh_dai_dien" not in obj:
+        obj["anh_dai_dien"] = None
+    return obj
 
 
 class AdminUserListAPIView(APIView):
@@ -49,7 +68,17 @@ class AdminUserListAPIView(APIView):
             page_size=f.get("page_size", 20),
         )
 
-        return Response(data, status=status.HTTP_200_OK)
+        # data có thể là list[dict] (chuẩn) hoặc lỡ có list[str JSON]
+        results = []
+        for item in data or []:
+            parsed = _maybe_load_json(item)
+            if isinstance(parsed, dict):
+                results.append(_ensure_avatar_key(parsed))
+            else:
+                # fallback nếu item không parse được
+                results.append(parsed)
+
+        return Response(results, status=status.HTTP_200_OK)
 
 
 class AdminUserDetailAPIView(APIView):
@@ -78,7 +107,11 @@ class AdminUserDetailAPIView(APIView):
         except PermissionError as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-        return Response(result, status=status.HTTP_200_OK)
+        parsed = _maybe_load_json(result)
+        if isinstance(parsed, dict):
+            parsed = _ensure_avatar_key(parsed)
+
+        return Response(parsed, status=status.HTTP_200_OK)
 
 
 class AdminResetPasswordAPIView(APIView):
@@ -118,4 +151,4 @@ class AdminResetPasswordAPIView(APIView):
         except PermissionError as e:
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-        return Response(result, status=status.HTTP_200_OK)
+        return Response(_maybe_load_json(result), status=status.HTTP_200_OK)
