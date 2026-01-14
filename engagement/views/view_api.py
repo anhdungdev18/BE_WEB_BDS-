@@ -2,6 +2,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.throttling import ScopedRateThrottle
 
 from engagement.services.view_procs import (
     sp_eng_post_view_add,
@@ -16,6 +17,8 @@ class PostViewCreateAPIView(APIView):
         -> ghi nhận 1 lượt xem (guest hoặc user)
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "post_view"
 
     def post(self, request, *args, **kwargs):
         post_id = request.data.get("post_id")

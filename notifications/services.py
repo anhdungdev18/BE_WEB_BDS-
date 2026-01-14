@@ -1,7 +1,10 @@
 from typing import Optional, Dict, Any
+import logging
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from .models import Notification
+
+logger = logging.getLogger(__name__)
 
 
 def create_notification(
@@ -51,6 +54,6 @@ def create_notification(
                 {"type": "notify.message", "data": payload},
             )
         except Exception:
-            pass
+            logger.exception("Failed to push notification realtime: notif_id=%s", notif.id)
 
     return notif

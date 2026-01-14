@@ -5,6 +5,9 @@ from .models import ChatMessage, ChatRoom
 from notifications.services import create_notification
 
 from django.contrib.auth.models import AnonymousUser
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -19,6 +22,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.user = user
         self.room_id = self.scope["url_route"]["kwargs"]["room_id"]
         self.group = f"room_{self.room_id}"
+
+        # Chỉ cho phép buyer/seller của room kết nối
+        if not await self._is_room_member(self.room_id, self.user.id):
+            logger.warning("WS chat unauthorized: user=%s room=%s", self.user.id, self.room_id)
+            await self.close()
+            return
 
         # Join group room_<room_id>
         await self.channel_layer.group_add(self.group, self.channel_name)
@@ -82,6 +91,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         Handler để gửi payload xuống client.
         """
         await self.send(text_data=json.dumps(event["data"]))
+
+    @database_sync_to_async
+    def _is_room_member(self, room_id, user_id) -> bool:
+        try:
+            room = ChatRoom.objects.get(id=room_id)
+        except ChatRoom.DoesNotExist:
+            return False
+        return str(user_id) == str(room.buyer_id) or str(user_id) == str(room.seller_id)
 
     @database_sync_to_async
     def _save(self, room_id, sender_id, text):

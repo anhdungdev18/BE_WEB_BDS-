@@ -9,6 +9,9 @@ class ChatRoom(models.Model):
     listing_id = models.CharField(max_length=9, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        unique_together = ("buyer", "seller", "listing_id")
+
 class ChatMessage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     room = models.ForeignKey(ChatRoom, on_delete=models.CASCADE, related_name="messages")
@@ -16,5 +19,3 @@ class ChatMessage(models.Model):
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=10, default="sent")
-class Meta:
-    unique_together = ("buyer", "seller", "listing_id")

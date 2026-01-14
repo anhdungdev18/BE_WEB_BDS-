@@ -9,11 +9,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-from ..serializers import RegisterSerializer, UserSerializer
+from ..serializers import RegisterSerializer, UserSerializer, BdsTokenObtainPairSerializer
 from accounts.models.permission import Permission  # 👈 THÊM DÒNG NÀY
 
 User = get_user_model()
+
+class BdsTokenObtainPairView(TokenObtainPairView):
+    serializer_class = BdsTokenObtainPairSerializer
 
 
 def index(request):

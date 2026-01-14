@@ -24,7 +24,9 @@ load_dotenv(BASE_DIR / ".env")
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
-DEBUG = os.getenv("DEBUG", "True") == "True"
+DEBUG = os.getenv("DEBUG", "False") == "True"
+if not DEBUG and SECRET_KEY == "dev-secret-key":
+    raise RuntimeError("SECRET_KEY must be set in production")
 
 ALLOWED_HOSTS = ["*"]
 
@@ -70,7 +72,7 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'mysite.urls'
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.1.249:3000",
 ]
@@ -175,6 +177,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.AllowAny",
     ),
+    "DEFAULT_THROTTLE_RATES": {
+        "post_view": "20/min",
+    },
 }
 APPEND_SLASH = True
 

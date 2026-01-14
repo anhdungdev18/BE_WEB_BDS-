@@ -13,7 +13,6 @@ from accounts.views.api_admin_users import (
     AdminResetPasswordAPIView,
 )
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
     TokenRefreshView,
     TokenBlacklistView,
 )
@@ -64,7 +63,7 @@ urlpatterns = [
     path("api/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
 
     # Nếu muốn giữ đường dẫn gốc luôn:
-    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/", auth_views.BdsTokenObtainPairView.as_view(), name="token_obtain_pair"),
     
     # POST /api/accounts/admin/users/<user_id>/reset-password/
     path(

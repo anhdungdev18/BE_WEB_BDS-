@@ -20,6 +20,11 @@ from listings.models import Post, PostStatus, ApprovalStatus
 from listings.models import Post, PostImage
 from listings.serializers import PostImageSerializer
 from django.shortcuts import get_object_or_404
+from django.db.models import Count
+from django.utils import timezone
+from listings.models import PostBumpLog
+from accounts.services.membership_services import get_active_membership
+from listings.services.bump_services import get_daily_bump_limit
 
 def _to_int(value: Optional[str]):
     if value in [None, ""]:
@@ -620,6 +625,12 @@ class PostBumpView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, post_id: str, *args, **kwargs):
+        if not has_perm(request, "post.bump"):
+            return Response(
+                {"detail": "Không có quyền đẩy tin (post.bump)"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Tìm post
         try:
             post = Post.objects.get(id=post_id, is_deleted=False)
@@ -692,9 +703,43 @@ class MyPostListView(APIView):
                 data = PostImageSerializer(img, context={"request": request}).data
                 image_map.setdefault(str(img.post_id), []).append(data)
 
+        # bump stats
+        today = timezone.localdate()
+        post_daily_limit = 2
+        post_bump_counts = {}
+        if post_ids:
+            qs = (
+                PostBumpLog.objects.filter(post_id__in=post_ids, created_at__date=today)
+                .values("post_id")
+                .annotate(count=Count("id"))
+            )
+            post_bump_counts = {str(row["post_id"]): row["count"] for row in qs}
+
+        membership = get_active_membership(request.user)
+        if membership:
+            daily_limit = get_daily_bump_limit(membership)
+            bumps_used_today = (
+                membership.bumps_used_today
+                if membership.last_bump_date == today
+                else 0
+            )
+            remaining_today = max(daily_limit - bumps_used_today, 0)
+        else:
+            daily_limit = 0
+            bumps_used_today = 0
+            remaining_today = 0
+
         for it in items:
             if isinstance(it, dict):
-                it["images"] = image_map.get(str(it.get("id")), [])
+                pid = str(it.get("id"))
+                it["images"] = image_map.get(pid, [])
+                post_bumps_used_today = post_bump_counts.get(pid, 0)
+                it["daily_limit"] = daily_limit
+                it["bumps_used_today"] = bumps_used_today
+                it["remaining_today"] = remaining_today
+                it["post_daily_limit"] = post_daily_limit
+                it["post_bumps_used_today"] = post_bumps_used_today
+                it["post_remaining_today"] = max(post_daily_limit - post_bumps_used_today, 0)
 
         return Response(
             {

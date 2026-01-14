@@ -38,17 +38,28 @@ def get_user_from_token(token_str: str):
 class JWTAuthMiddleware(BaseMiddleware):
     """
     Middleware cho Channels:
-    - Lấy token từ query string: ?token=<access_token>
+    - Lấy token từ Authorization header: Bearer <access_token>
+    - Fallback query string: ?token=<access_token>
     - Verify bằng SimpleJWT
     - Gán scope["user"]
     """
 
     async def __call__(self, scope, receive, send):
-        # Lấy token từ query string
-        query_string = scope.get("query_string", b"").decode()
-        query_params = urllib.parse.parse_qs(query_string)
-        token_list = query_params.get("token") or query_params.get("access") or []
-        token = token_list[0] if token_list else None
+        # Ưu tiên Authorization header
+        token = None
+        for k, v in scope.get("headers", []):
+            if k.lower() == b"authorization":
+                value = v.decode(errors="ignore")
+                if value.lower().startswith("bearer "):
+                    token = value.split(" ", 1)[1].strip()
+                break
+
+        # Fallback query string nếu header không có
+        if not token:
+            query_string = scope.get("query_string", b"").decode()
+            query_params = urllib.parse.parse_qs(query_string)
+            token_list = query_params.get("token") or query_params.get("access") or []
+            token = token_list[0] if token_list else None
 
         if token:
             scope["user"] = await get_user_from_token(token)
