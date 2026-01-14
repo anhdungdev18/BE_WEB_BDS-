@@ -14,6 +14,7 @@ urlpatterns = [
     path("ping/", ping),
     #path("", include("polls.urls")),
     path("", RedirectView.as_view(url="/admin/", permanent=False)),
+    path("test/notifications/", TemplateView.as_view(template_name="notifications_test.html")),
     # Messaging app
     path("rooms/", include("messaging.urls")),
     path("api/", include("messaging.urls")),

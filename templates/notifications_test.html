@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notifications Realtime Test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0c111b;
+        --bg-2: #141a2a;
+        --card: #151b2c;
+        --ink: #f2f5ff;
+        --muted: #a7b0c5;
+        --accent: #4dd6b6;
+        --accent-2: #ffc857;
+        --danger: #ff5d6c;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        --radius: 16px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(1200px 600px at 10% 10%, #1b2440, #0c111b),
+          radial-gradient(800px 400px at 90% 0%, #1a2f3b, transparent);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .wrap {
+        width: min(980px, 100%);
+        display: grid;
+        gap: 18px;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .title {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+      }
+
+      .pill {
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        background: rgba(77, 214, 182, 0.15);
+        color: var(--accent);
+        border: 1px solid rgba(77, 214, 182, 0.35);
+      }
+
+      .card {
+        background: linear-gradient(160deg, var(--card), rgba(21, 27, 44, 0.7));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input,
+      textarea {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #0f1422;
+        color: var(--ink);
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+
+      textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        color: #0b1018;
+        background: var(--accent);
+      }
+
+      button.secondary {
+        background: #273048;
+        color: var(--ink);
+      }
+
+      button.danger {
+        background: var(--danger);
+        color: #fff;
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--danger);
+        box-shadow: 0 0 10px rgba(255, 93, 108, 0.6);
+      }
+
+      .dot.live {
+        background: var(--accent);
+        box-shadow: 0 0 10px rgba(77, 214, 182, 0.6);
+      }
+
+      .log {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        color: #cfe3ff;
+        background: #0b111f;
+        border-radius: 12px;
+        padding: 12px;
+        max-height: 260px;
+        overflow: auto;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .notif {
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(13, 18, 32, 0.65);
+      }
+
+      .notif h4 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .notif p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="header">
+        <div class="title">Notifications Realtime Test</div>
+        <div class="pill">WebSocket</div>
+      </div>
+
+      <div class="card grid">
+        <div>
+          <label for="baseUrl">API Base URL</label>
+          <input id="baseUrl" value="http://127.0.0.1:8000" />
+        </div>
+        <div>
+          <label for="token">Access Token</label>
+          <input id="token" placeholder="Paste JWT token" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="actions">
+          <button id="btnConnect">Connect WS</button>
+          <button id="btnDisconnect" class="secondary">Disconnect</button>
+          <button id="btnFetch" class="secondary">Fetch Notifications</button>
+          <button id="btnUnread" class="secondary">Unread Count</button>
+          <button id="btnClear" class="danger">Clear</button>
+        </div>
+        <div class="status" style="margin-top: 12px">
+          <div id="statusDot" class="dot"></div>
+          <div id="statusText">Disconnected</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Realtime Log</label>
+        <pre id="log" class="log"></pre>
+      </div>
+
+      <div class="card">
+        <label>Latest Notifications</label>
+        <div id="notifList" class="list"></div>
+      </div>
+    </div>
+
+    <script>
+      const baseUrl = document.getElementById("baseUrl");
+      const token = document.getElementById("token");
+      const logEl = document.getElementById("log");
+      const notifList = document.getElementById("notifList");
+      const statusDot = document.getElementById("statusDot");
+      const statusText = document.getElementById("statusText");
+      let ws = null;
+
+      function writeLog(line) {
+        const ts = new Date().toISOString();
+        logEl.textContent = `[${ts}] ${line}\n` + logEl.textContent;
+      }
+
+      function setStatus(connected) {
+        statusDot.classList.toggle("live", connected);
+        statusText.textContent = connected ? "Connected" : "Disconnected";
+      }
+
+      function cleanBaseUrl() {
+        return baseUrl.value.trim().replace(/\/+$/, "");
+      }
+
+      function getWsUrl() {
+        const base = cleanBaseUrl();
+        if (!base) return "";
+        const url = new URL(base);
+        url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+        url.pathname = "/ws/notifications/";
+        url.searchParams.set("token", token.value.trim());
+        return url.toString();
+      }
+
+      function renderItems(items) {
+        notifList.innerHTML = "";
+        if (!Array.isArray(items) || items.length === 0) {
+          notifList.innerHTML = "<div class=\"notif\">No notifications yet.</div>";
+          return;
+        }
+        items.forEach((item) => {
+          const wrap = document.createElement("div");
+          wrap.className = "notif";
+          wrap.innerHTML = `
+            <h4>${item.title || "(no title)"} <span style="color:#ffc857">[${item.type}]</span></h4>
+            <p>${item.content || ""}</p>
+            <div class="meta">
+              <span>actor: ${item.actor_id || "-"}</span>
+              <span>${item.created_at || ""}</span>
+            </div>
+          `;
+          notifList.appendChild(wrap);
+        });
+      }
+
+      async function fetchNotifications() {
+        const url = `${cleanBaseUrl()}/api/notifications/`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token.value.trim()}` },
+        });
+        const data = await res.json();
+        writeLog(`GET /api/notifications/ -> ${res.status}`);
+        renderItems(data.items || []);
+      }
+
+      async function fetchUnread() {
+        const url = `${cleanBaseUrl()}/api/notifications/unread-count/`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token.value.trim()}` },
+        });
+        const data = await res.json();
+        writeLog(`GET /api/notifications/unread-count/ -> ${res.status}, unread=${data.unread}`);
+      }
+
+      document.getElementById("btnConnect").addEventListener("click", () => {
+        if (ws) ws.close();
+        const wsUrl = getWsUrl();
+        if (!wsUrl) {
+          writeLog("Missing base URL or token.");
+          return;
+        }
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+          setStatus(true);
+          writeLog(`WS connected: ${wsUrl}`);
+        };
+        ws.onmessage = (event) => {
+          writeLog(`WS message: ${event.data}`);
+          try {
+            const msg = JSON.parse(event.data);
+            renderItems([msg, ...Array.from(notifList.children).map((n) => ({
+              title: n.querySelector("h4")?.textContent || "",
+              content: n.querySelector("p")?.textContent || "",
+              actor_id: n.querySelector(".meta span")?.textContent?.replace("actor: ", "") || "",
+              type: "ws",
+              created_at: "",
+            }))]);
+          } catch (_) {}
+        };
+        ws.onclose = () => {
+          setStatus(false);
+          writeLog("WS closed");
+        };
+        ws.onerror = () => {
+          setStatus(false);
+          writeLog("WS error");
+        };
+      });
+
+      document.getElementById("btnDisconnect").addEventListener("click", () => {
+        if (ws) ws.close();
+      });
+
+      document.getElementById("btnFetch").addEventListener("click", fetchNotifications);
+      document.getElementById("btnUnread").addEventListener("click", fetchUnread);
+      document.getElementById("btnClear").addEventListener("click", () => {
+        logEl.textContent = "";
+        notifList.innerHTML = "";
+      });
+    </script>
+  </body>
+</html>
