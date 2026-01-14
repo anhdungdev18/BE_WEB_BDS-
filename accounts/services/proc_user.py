@@ -72,10 +72,12 @@ def sp_user_update_profile_raw(
     actor_id: str,
     is_admin: bool,
     username: Optional[str],
+    first_name: Optional[str],
+    last_name: Optional[str],
     phone: Optional[str],
+    cccd_number: Optional[str],
     address: Optional[str],
     bio: Optional[str],
-    avatar: Optional[str],
 ):
     """
     Wrapper cho SP sp_user_update_profile:
@@ -85,10 +87,12 @@ def sp_user_update_profile_raw(
         p_actor_id,
         p_is_admin,
         p_username,
+        p_first_name,
+        p_last_name,
         p_so_dien_thoai,
+        p_cccd_number,
         p_address,
-        p_bio,
-        p_anh_dai_dien
+        p_bio
       )
 
     Ghi chú:
@@ -103,10 +107,12 @@ def sp_user_update_profile_raw(
                 actor_id,
                 1 if is_admin else 0,
                 username,
+                first_name,
+                last_name,
                 phone,
+                cccd_number,
                 address,
                 bio,
-                avatar,
             ],
         )
         return _ensure_user_avatar_key(_fetch_one_json(cur))
@@ -148,10 +154,12 @@ def sp_users_list_json(q=None, is_active=None, page: int = 1, page_size: int = 2
 def sp_user_update_profile(
     user_id: str,
     username=None,
+    first_name=None,
+    last_name=None,
     phone=None,
+    cccd_number=None,
     address=None,
     bio=None,
-    avatar=None,
 ):
     """
     User tự sửa hồ sơ của chính mình.
@@ -161,10 +169,12 @@ def sp_user_update_profile(
         actor_id=user_id,
         is_admin=False,
         username=username,
+        first_name=first_name,
+        last_name=last_name,
         phone=phone,
+        cccd_number=cccd_number,
         address=address,
         bio=bio,
-        avatar=avatar,
     )
 
 

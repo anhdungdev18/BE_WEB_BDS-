@@ -7,6 +7,8 @@ from engagement.services.comment_procs import (
     sp_eng_comment_create,
     sp_eng_comments_by_post,
 )
+from listings.models import Post
+from notifications.services import create_notification
 
 
 class CommentCreateAPIView(APIView):
@@ -44,6 +46,20 @@ class CommentCreateAPIView(APIView):
             content=content,
             parent_id=parent_id,
         )
+        try:
+            post = Post.objects.get(id=post_id)
+            create_notification(
+                user_id=post.owner_id,
+                actor_id=user_id,
+                type="comment",
+                title="Bình luận mới",
+                content=content[:200],
+                target_type="post",
+                target_id=post_id,
+                extra={"comment_id": row.get("id") if isinstance(row, dict) else None},
+            )
+        except Post.DoesNotExist:
+            pass
         return Response(row, status=status.HTTP_201_CREATED)
 
 

@@ -49,18 +49,15 @@ def me(request):
 def update_me(request):
     nz = lambda x: None if x in (None, "", "null") else x
 
-    # nhận cả 2 key để khỏi lệch giữa FE/API khác nhau
-    avatar_val = request.data.get("anh_dai_dien")
-    if avatar_val in (None, "", "null"):
-        avatar_val = request.data.get("avatar")
-
     raw = sp_user_update_profile(
         request.user.id,
         nz(request.data.get("username")),
+        nz(request.data.get("first_name")),
+        nz(request.data.get("last_name")),
         nz(request.data.get("so_dien_thoai")),
+        nz(request.data.get("cccd_number")),
         nz(request.data.get("address")),
         nz(request.data.get("bio")),
-        nz(avatar_val),
     )
     data = _maybe_load_json(raw)
     data = _ensure_avatar_key(data) if isinstance(data, dict) else data

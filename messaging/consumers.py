@@ -1,7 +1,8 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 import json
-from .models import ChatMessage
+from .models import ChatMessage, ChatRoom
+from notifications.services import create_notification
 
 from django.contrib.auth.models import AnonymousUser
 
@@ -55,6 +56,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Lưu DB
         msg = await self._save(self.room_id, sender_id, text)
+        await self._notify(self.room_id, sender_id, text, msg["id"])
 
         # Payload gửi lại cho mọi người trong room
         payload = {
@@ -92,3 +94,22 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "id": m.id,
             "created_at": m.created_at.isoformat(),
         }
+
+    @database_sync_to_async
+    def _notify(self, room_id, sender_id, text, message_id):
+        try:
+            room = ChatRoom.objects.get(id=room_id)
+        except ChatRoom.DoesNotExist:
+            return
+
+        other_user_id = room.seller_id if str(sender_id) == str(room.buyer_id) else room.buyer_id
+        create_notification(
+            user_id=other_user_id,
+            actor_id=sender_id,
+            type="message",
+            title="Tin nhắn mới",
+            content=(text or "")[:200],
+            target_type="room",
+            target_id=str(room.id),
+            extra={"message_id": str(message_id)},
+        )

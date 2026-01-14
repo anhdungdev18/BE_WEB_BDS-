@@ -101,10 +101,12 @@ def update_own_profile(actor, data: dict) -> str:
         actor_id=str(actor.id),
         is_admin=False,
         username=data.get("username"),
+        first_name=data.get("first_name"),
+        last_name=data.get("last_name"),
         phone=data.get("phone"),
+        cccd_number=data.get("cccd_number"),
         address=data.get("address"),
         bio=data.get("bio"),
-        avatar=data.get("avatar"),
     )
     return _as_json_string(payload)
 
@@ -123,10 +125,12 @@ def admin_update_user_profile(actor, target_user_id: str, data: dict) -> str:
         actor_id=str(actor.id),
         is_admin=True,  # hoặc is_admin_like(actor) cũng được
         username=data.get("username"),
+        first_name=data.get("first_name"),
+        last_name=data.get("last_name"),
         phone=data.get("phone"),
+        cccd_number=data.get("cccd_number"),
         address=data.get("address"),
         bio=data.get("bio"),
-        avatar=data.get("avatar"),
     )
     return _as_json_string(payload)
 

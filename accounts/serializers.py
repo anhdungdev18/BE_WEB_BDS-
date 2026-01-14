@@ -153,9 +153,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "username",
+            "first_name",
+            "last_name",
             "email",
             "is_active",
             "so_dien_thoai",
+            "cccd_number",
             "address",
             "bio",
             "anh_dai_dien",
@@ -172,14 +175,12 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 class ProfileUpdateSerializer(serializers.Serializer):
     username = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    cccd_number = serializers.CharField(required=False, allow_blank=True, max_length=12)
     address = serializers.CharField(required=False, allow_blank=True, max_length=255)
     bio = serializers.CharField(required=False, allow_blank=True, style={"base_template": "textarea.html"})
-    avatar = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        help_text="URL ảnh đại diện (Cloudinary/S3, ...)",
-    )
 
 
 class AdminUpdateUserProfileSerializer(ProfileUpdateSerializer):

@@ -8,6 +8,8 @@ from engagement.services.favorite_procs import (
     sp_eng_favorites_by_user,
     sp_eng_favorites_by_post,
 )
+from listings.models import Post
+from notifications.services import create_notification
 
 
 class FavoriteToggleAPIView(APIView):
@@ -29,6 +31,20 @@ class FavoriteToggleAPIView(APIView):
 
         user_id = str(request.user.id)
         result = sp_eng_favorite_toggle(user_id=user_id, post_id=post_id)
+        if int(result.get("favorited", 0)) == 1:
+            try:
+                post = Post.objects.get(id=post_id)
+                create_notification(
+                    user_id=post.owner_id,
+                    actor_id=user_id,
+                    type="favorite",
+                    title="Bài viết được yêu thích",
+                    content=None,
+                    target_type="post",
+                    target_id=post_id,
+                )
+            except Post.DoesNotExist:
+                pass
         return Response(result, status=status.HTTP_200_OK)
 
 

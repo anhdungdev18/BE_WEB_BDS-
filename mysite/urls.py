@@ -23,7 +23,9 @@ urlpatterns = [
     path("api/listings/", include("listings.urls")),
     # Engagement app 
     path("api/engagement/", include("engagement.urls", namespace="engagement")),
+    # Notifications app
+    path("api/notifications/", include("notifications.urls")),
     # Chatbot app
-    path("api/chatbot/", ChatbotAPIView.as_view(), name="chatbot")
+    path("api/chatbot/", ChatbotAPIView.as_view(), name="chatbot"),
 ]
 
