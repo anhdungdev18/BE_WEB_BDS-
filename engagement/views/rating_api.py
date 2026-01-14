@@ -7,6 +7,9 @@ from engagement.services.rating_procs import (
     sp_eng_rating_upsert,
     sp_eng_ratings_by_post,
 )
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 class RatingUpsertAPIView(APIView):
@@ -69,6 +72,17 @@ class RatingListByPostAPIView(APIView):
             )
 
         items = sp_eng_ratings_by_post(post_id=post_id)
+        user_ids = {str(r.get("user_id")) for r in items if r.get("user_id")}
+        if user_ids:
+            users = User.objects.filter(id__in=list(user_ids)).values("id", "username", "email")
+            user_map = {str(u["id"]): u for u in users}
+            for r in items:
+                uid = str(r.get("user_id"))
+                u = user_map.get(uid)
+                if u:
+                    r["user_name"] = u.get("username") or u.get("email") or ""
+                else:
+                    r["user_name"] = ""
         return Response(items, status=status.HTTP_200_OK)
 class RatingSummaryAPIView(APIView):
     """
