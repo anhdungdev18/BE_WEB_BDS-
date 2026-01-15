@@ -8,6 +8,8 @@ from engagement.services.rating_procs import (
     sp_eng_ratings_by_post,
 )
 from django.contrib.auth import get_user_model
+from listings.models import Post
+from notifications.services import create_notification
 
 User = get_user_model()
 
@@ -53,6 +55,22 @@ class RatingUpsertAPIView(APIView):
             score=score,
             comment=comment,
         )
+        try:
+            post = Post.objects.get(id=post_id)
+            summary = f"{score} sao"
+            content = comment.strip() if isinstance(comment, str) and comment.strip() else summary
+            create_notification(
+                user_id=post.owner_id,
+                actor_id=user_id,
+                type="post_status",
+                title="Đánh giá mới",
+                content=content[:200],
+                target_type="post",
+                target_id=post_id,
+                extra={"score": score, "comment": comment},
+            )
+        except Post.DoesNotExist:
+            pass
         return Response(row, status=status.HTTP_200_OK)
 
 

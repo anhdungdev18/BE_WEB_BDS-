@@ -38,10 +38,13 @@ class PublicUserProfileAPIView(APIView):
 
         data = {
             "id": user.id,
-            "username": user.username,
             "full_name": getattr(user, "full_name", None),
+            "first_name": getattr(user, "first_name", None),
+            "last_name": getattr(user, "last_name", None),
             "anh_dai_dien": _avatar_url(user),
             "bio": getattr(user, "bio", None),
+            "email": getattr(user, "email", None),
+            "phone": getattr(user, "so_dien_thoai", None) or getattr(user, "phone", None),
             "joined_at": user.date_joined,
         }
         return Response(data, status=status.HTTP_200_OK)
