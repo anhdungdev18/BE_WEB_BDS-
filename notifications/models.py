@@ -9,6 +9,7 @@ class Notification(models.Model):
     TYPE_FAVORITE = "favorite"
     TYPE_POST_STATUS = "post_status"
     TYPE_MEMBERSHIP = "membership"
+    TYPE_POST_BUMP = "post_bump"
 
     TYPE_CHOICES = [
         (TYPE_MESSAGE, "Message"),
@@ -16,6 +17,7 @@ class Notification(models.Model):
         (TYPE_FAVORITE, "Favorite"),
         (TYPE_POST_STATUS, "Post Status"),
         (TYPE_MEMBERSHIP, "Membership"),
+        (TYPE_POST_BUMP, "Post Bump"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

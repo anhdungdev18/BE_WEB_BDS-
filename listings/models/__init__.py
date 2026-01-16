@@ -6,6 +6,7 @@ from .post_history import PostHistory
 from .post import Post
 from .post_image import PostImage
 from .post_bump_log import PostBumpLog
+from .post_bump_schedule import PostBumpSchedule
 __all__ = [
     "PostType",
     "Category",
@@ -15,4 +16,5 @@ __all__ = [
     "Post",
     "PostImage",
     "PostBumpLog",
+    "PostBumpSchedule",
 ]
