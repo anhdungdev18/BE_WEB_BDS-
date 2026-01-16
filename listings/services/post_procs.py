@@ -172,6 +172,7 @@ def sp_posts_search(
     order: Optional[str],
     page: Optional[int],
     page_size: Optional[int],
+    include_all: int = 0,
 ):
     with connection.cursor() as cur:
         cur.callproc(
@@ -191,6 +192,7 @@ def sp_posts_search(
                 order,
                 page,
                 page_size,
+                include_all,
             ],
         )
         return _fetch_all_json(cur)
@@ -207,6 +209,7 @@ def sp_posts_count(
     province: Optional[str],
     district: Optional[str],
     ward: Optional[str],
+    include_all: int = 0,
 ) -> int:
     with connection.cursor() as cur:
         cur.callproc(
@@ -222,6 +225,7 @@ def sp_posts_count(
                 province,
                 district,
                 ward,
+                include_all,
             ],
         )
         data = _fetch_one_json(cur)

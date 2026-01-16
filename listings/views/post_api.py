@@ -19,6 +19,7 @@ from listings.services.auth_helpers import (
 from listings.models import Post, PostStatus, ApprovalStatus
 from listings.models import Post, PostImage
 from listings.serializers import PostImageSerializer
+from notifications.services import create_notification
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from django.utils import timezone
@@ -94,6 +95,7 @@ class PostListCreateView(APIView):
         order = params.get("order")
         page = _to_int(params.get("page")) or 1
         page_size = _to_int(params.get("page_size")) or 20
+        include_all = 1 if get_is_admin_flag(request) else 0
 
         items = post_procs.sp_posts_search(
             q=q,
@@ -110,6 +112,7 @@ class PostListCreateView(APIView):
             order=order,
             page=page,
             page_size=page_size,
+            include_all=include_all,
         )
 
         # ===== GẮN ẢNH CHO TỪNG POST =====
@@ -151,6 +154,7 @@ class PostListCreateView(APIView):
             province=province,
             district=district,
             ward=ward,
+            include_all=include_all,
         )
 
         return Response(
@@ -565,6 +569,52 @@ class PostStatusChangeView(APIView):
 
         if result and result.get("error") == "NOT_ALLOWED_OR_NOT_FOUND":
             return Response(result, status=status.HTTP_404_NOT_FOUND)
+
+        # Notify owner about approval/status changes (admin action).
+        try:
+            post = Post.objects.get(id=post_id)
+        except Post.DoesNotExist:
+            post = None
+
+        if post:
+            approval_name = None
+            post_status_name = None
+            if approval_status_id is not None:
+                approval = ApprovalStatus.objects.filter(id=approval_status_id).first()
+                approval_name = approval.name if approval else None
+            if post_status_id is not None:
+                st = PostStatus.objects.filter(id=post_status_id).first()
+                post_status_name = st.name if st else None
+
+            if approval_name or post_status_name:
+                title = "Cập nhật trạng thái bài đăng"
+                if approval_name == "Approved":
+                    title = "Bài đăng đã được duyệt"
+                elif approval_name == "Rejected":
+                    title = "Bài đăng bị từ chối"
+
+                parts = []
+                if approval_name:
+                    parts.append(f"Duyệt: {approval_name}")
+                if post_status_name:
+                    parts.append(f"Trạng thái: {post_status_name}")
+                content = ", ".join(parts) if parts else None
+
+                create_notification(
+                    user_id=post.owner_id,
+                    actor_id=actor_id,
+                    type="post_status",
+                    title=title,
+                    content=content,
+                    target_type="post",
+                    target_id=post_id,
+                    extra={
+                        "approval_status_id": approval_status_id,
+                        "approval_status": approval_name,
+                        "post_status_id": post_status_id,
+                        "post_status": post_status_name,
+                    },
+                )
 
         return Response(result)
 
