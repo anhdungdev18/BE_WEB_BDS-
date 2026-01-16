@@ -46,10 +46,14 @@ def activate_membership_for_user(user, plan: MembershipPlan) -> UserMembership:
         if membership.expired_at > now:
             # Đang còn hạn → nối thêm thời gian
             membership.expired_at = membership.expired_at + duration
+            action_label = "Gia hạn VIP"
         else:
             # Hết hạn → reset từ bây giờ
             membership.started_at = now
             membership.expired_at = now + duration
+            action_label = "Kích hoạt lại VIP"
+    else:
+        action_label = "Nâng cấp VIP"
 
     membership.save()
 
@@ -62,6 +66,31 @@ def activate_membership_for_user(user, plan: MembershipPlan) -> UserMembership:
         )
     except Role.DoesNotExist:
         # Nếu chưa cấu hình role AGENT thì bỏ qua, không làm crash
+        pass
+
+    try:
+        from notifications.services import create_notification
+
+        create_notification(
+            user_id=str(user.id),
+            actor_id="system",
+            type="membership",
+            title=action_label,
+            content=(
+                f"{action_label} thành công. Gói: {getattr(plan, 'name', '')}. "
+                f"Hiệu lực từ {membership.started_at} đến {membership.expired_at}."
+            ),
+            target_type="membership",
+            target_id=str(plan.id) if getattr(plan, "id", None) else None,
+            extra={
+                "plan_code": getattr(plan, "code", None),
+                "plan_name": getattr(plan, "name", None),
+                "started_at": membership.started_at.isoformat(),
+                "expired_at": membership.expired_at.isoformat(),
+            },
+        )
+    except Exception:
+        # Không làm fail luồng nâng cấp nếu thông báo lỗi.
         pass
 
     return membership

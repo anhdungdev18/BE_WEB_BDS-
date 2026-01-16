@@ -8,12 +8,14 @@ class Notification(models.Model):
     TYPE_COMMENT = "comment"
     TYPE_FAVORITE = "favorite"
     TYPE_POST_STATUS = "post_status"
+    TYPE_MEMBERSHIP = "membership"
 
     TYPE_CHOICES = [
         (TYPE_MESSAGE, "Message"),
         (TYPE_COMMENT, "Comment"),
         (TYPE_FAVORITE, "Favorite"),
         (TYPE_POST_STATUS, "Post Status"),
+        (TYPE_MEMBERSHIP, "Membership"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

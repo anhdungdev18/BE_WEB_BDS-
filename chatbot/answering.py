@@ -1,5 +1,6 @@
 # chatbot/answering.py
 from typing import Iterable, Any
+from django.conf import settings
 from common.openai_client import get_openai_client
 from chatbot.models import ChatTurn
 from listings.models import Post
@@ -46,6 +47,7 @@ def build_listings_context(listings: Iterable[Post]) -> str:
     if not listings:
         return "KHÔNG CÓ BẤT ĐỘNG SẢN NÀO TRONG DANH SÁCH."
 
+    base_url = (getattr(settings, "FRONTEND_BASE_URL", "") or "").rstrip("/")
     rows = []
     for p in listings:
         addr_text = json_to_text(p.address)
@@ -55,7 +57,7 @@ def build_listings_context(listings: Iterable[Post]) -> str:
             f"  Địa chỉ: {addr_text}\n"
             f"  Diện tích: {p.area} m2\n"
             f"  Giá: {float(p.price):,.0f} VND\n"
-            f"  Link: https://webbds.example.com/tin/{p.id}\n"
+            f"  Link: {base_url}/tin/{p.id}\n"
         )
     return "\n".join(rows)
 

@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.urls import path, include
 from messaging.views import create_room, room_messages 
 from django.views.generic import RedirectView
+from accounts.views.password_reset_page import reset_password_page
 from chatbot.api import ChatbotAPIView 
 from django.http import JsonResponse
  
@@ -28,5 +29,6 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),
     # Chatbot app
     path("api/chatbot/", ChatbotAPIView.as_view(), name="chatbot"),
+    path("reset-password/", reset_password_page, name="reset-password-page"),
 ]
 

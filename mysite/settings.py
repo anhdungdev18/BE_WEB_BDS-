@@ -99,35 +99,35 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.mysql",
-#         "NAME": os.getenv("DB_NAME", "web_bds"),
-#         "USER": os.getenv("DB_USER", "webuser"),
-#         "PASSWORD": os.getenv("DB_PASSWORD", "webpass"),
-#         "HOST": os.getenv("DB_HOST", "127.0.0.1"),  # local: 127.0.0.1
-#         "PORT": os.getenv("DB_PORT", "3307"),        # local: 3307
-#         "OPTIONS": {
-#             "charset": "utf8mb4",
-#             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-#         },
-#     }
-# }
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
         "NAME": os.getenv("DB_NAME", "web_bds"),
-        "USER": os.getenv("DB_USER", "root"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "rootpass"),
-        "HOST": os.getenv("DB_HOST", "10.251.12.238"),  # local: 127.0.0.1
-        "PORT": os.getenv("DB_PORT", "3308"),        # local: 3307
+        "USER": os.getenv("DB_USER", "webuser"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "webpass"),
+        "HOST": os.getenv("DB_HOST", "127.0.0.1"),  # local: 127.0.0.1
+        "PORT": os.getenv("DB_PORT", "3307"),        # local: 3307
         "OPTIONS": {
             "charset": "utf8mb4",
             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
         },
     }
 }
+
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.mysql",
+#         "NAME": os.getenv("DB_NAME", "web_bds"),
+#         "USER": os.getenv("DB_USER", "root"),
+#         "PASSWORD": os.getenv("DB_PASSWORD", "rootpass"),
+#         "HOST": os.getenv("DB_HOST", "10.251.12.238"),  # local: 127.0.0.1
+#         "PORT": os.getenv("DB_PORT", "3308"),        # local: 3307
+#         "OPTIONS": {
+#             "charset": "utf8mb4",
+#             "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+#         },
+#     }
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -230,7 +230,15 @@ MEDIA_ROOT = BASE_DIR / "media"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") 
 
 # ===== PASSWORD RESET EMAIL SETTINGS =====
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+FRONTEND_BASE_URL = os.getenv(
+    "FRONTEND_BASE_URL",
+    os.getenv("BASE_URL", "http://localhost:3000"),
+)
+RESET_PASSWORD_BASE_URL = os.getenv("RESET_PASSWORD_BASE_URL", FRONTEND_BASE_URL)
+RESET_PASSWORD_API_BASE_URL = os.getenv(
+    "RESET_PASSWORD_API_BASE_URL",
+    os.getenv("LISTINGS_SERVICE_BASE_URL", "http://127.0.0.1:8000"),
+)
 
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")

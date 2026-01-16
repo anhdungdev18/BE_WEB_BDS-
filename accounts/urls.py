@@ -11,6 +11,7 @@ from accounts.views.api_admin_users import (
     AdminUserListAPIView,
     AdminUserDetailAPIView,
     AdminResetPasswordAPIView,
+    AdminApproveUserAPIView,
 )
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -23,7 +24,10 @@ from accounts.views.membership import (
     MembershipUpgradeInitAPIView,
     MembershipOrderMarkPaidAPIView,
     MembershipOrderListAPIView,
-    MembershipMeAPIView
+    MembershipMeAPIView,
+    VipUserListAPIView,
+    MembershipPlanListAPIView,
+    MembershipOrderByUserAPIView,
 )
 from accounts.views.password_reset_api import PasswordForgotAPIView, PasswordResetAPIView
 from .views.avatar_api import MeAvatarView
@@ -72,6 +76,11 @@ urlpatterns = [
         name="admin-reset-password",
     ),
     path(
+        "admin/users/<str:user_id>/approve/",
+        AdminApproveUserAPIView.as_view(),
+        name="admin-approve-user",
+    ),
+    path(
         "users/<str:user_id>/public-profile/",
         PublicUserProfileAPIView.as_view(),
         name="public-user-profile",
@@ -103,6 +112,21 @@ urlpatterns = [
         "membership/me/",  
         MembershipMeAPIView.as_view(),
         name="membership-me",    ),
+    path(
+        "membership/vip-users/",
+        VipUserListAPIView.as_view(),
+        name="vip-user-list",
+    ),
+    path(
+        "membership/plans/",
+        MembershipPlanListAPIView.as_view(),
+        name="membership-plan-list",
+    ),
+    path(
+        "users/<str:user_id>/membership/orders/",
+        MembershipOrderByUserAPIView.as_view(),
+        name="user-membership-order-list",
+    ),
     # ================== PASSWORD RESET ==================
     path("password/forgot/", PasswordForgotAPIView.as_view(), name="password-forgot"),
     path("password/reset/", PasswordResetAPIView.as_view(), name="password-reset"),

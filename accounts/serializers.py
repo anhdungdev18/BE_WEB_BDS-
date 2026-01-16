@@ -3,7 +3,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.utils.translation import gettext_lazy as _
-from accounts.models import MembershipOrder
+from accounts.models import MembershipOrder, UserMembership, MembershipPlan
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from accounts.models.role import Role
@@ -275,6 +275,38 @@ class MembershipOrderListSerializer(serializers.ModelSerializer):
 
     def get_user_username(self, obj):
         return getattr(obj.user, "username", None)
+
+
+class MembershipPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MembershipPlan
+        fields = ["id", "code", "name", "price_vnd", "duration_days", "is_active"]
+
+
+class VipUserListSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id")
+    user_email = serializers.EmailField(source="user.email")
+    user_username = serializers.CharField(source="user.username")
+    plan_code = serializers.SerializerMethodField()
+    plan_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserMembership
+        fields = [
+            "user_id",
+            "user_email",
+            "user_username",
+            "plan_code",
+            "plan_name",
+            "started_at",
+            "expired_at",
+        ]
+
+    def get_plan_code(self, obj):
+        return getattr(obj.plan, "code", None)
+
+    def get_plan_name(self, obj):
+        return getattr(obj.plan, "name", None)
 
 
 class MeSerializer(serializers.ModelSerializer):

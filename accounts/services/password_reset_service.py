@@ -40,7 +40,9 @@ def create_password_reset_token_for_email(
         user_agent=(user_agent or "")[:255] if user_agent else None,
     )
 
-    fe_base = getattr(settings, "FRONTEND_BASE_URL", "http://localhost:3000")
+    fe_base = getattr(settings, "RESET_PASSWORD_BASE_URL", None) or getattr(
+        settings, "FRONTEND_BASE_URL", "http://localhost:3000"
+    )
     reset_link = f"{fe_base}/reset-password?token={raw_token}"
 
     subject = "Đặt lại mật khẩu"

@@ -152,3 +152,39 @@ class AdminResetPasswordAPIView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
         return Response(_maybe_load_json(result), status=status.HTTP_200_OK)
+
+
+class AdminApproveUserAPIView(APIView):
+    """
+    POST /api/accounts/admin/users/<user_id>/approve/
+    Body (optional):
+      - is_active: true/false (default true)
+      - verified: true/false (default true) -> maps to da_xac_minh
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, user_id: str):
+        if not user_has_perm(request.user, "user.manage"):
+            return Response(
+                {"detail": "NO_PERMISSION_MANAGE_USER"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        target_user = get_object_or_404(User, pk=user_id)
+        is_active = request.data.get("is_active", True)
+        verified = request.data.get("verified", True)
+
+        target_user.is_active = bool(is_active)
+        target_user.da_xac_minh = bool(verified)
+        target_user.save(update_fields=["is_active", "da_xac_minh"])
+
+        return Response(
+            {
+                "id": target_user.id,
+                "username": target_user.username,
+                "email": target_user.email,
+                "is_active": target_user.is_active,
+                "da_xac_minh": target_user.da_xac_minh,
+            },
+            status=status.HTTP_200_OK,
+        )

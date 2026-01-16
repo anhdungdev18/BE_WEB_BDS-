@@ -8,6 +8,7 @@ from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
@@ -15,13 +16,19 @@ from rest_framework.pagination import PageNumberPagination
 from accounts.models import (
     MembershipPlan,
     MembershipOrder,
+    UserMembership,
 )
 from accounts.utils.vietqr import build_vietqr_url
-from accounts.serializers import MembershipOrderListSerializer
+from accounts.serializers import (
+    MembershipOrderListSerializer,
+    VipUserListSerializer,
+    MembershipPlanSerializer,
+)
 
 from accounts.services.membership_services import (
     mark_order_paid_and_activate, get_active_membership
 )
+from accounts.services.authz import is_admin_like
 
 
 class MembershipUpgradeInitAPIView(APIView):
@@ -274,3 +281,57 @@ class MembershipMeAPIView(APIView):
             }
 
         return Response(data)
+
+
+class VipUserListAPIView(ListAPIView):
+    """
+    GET /api/accounts/membership/vip-users/
+    Trả về danh sách user VIP còn hiệu lực (kèm ngày bắt đầu/hết hạn).
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    serializer_class = VipUserListSerializer
+
+    def get_queryset(self):
+        now = timezone.now()
+        return (
+            UserMembership.objects
+            .select_related("user", "plan")
+            .filter(expired_at__gt=now)
+            .order_by("-started_at")
+        )
+
+
+class MembershipPlanListAPIView(ListAPIView):
+    """
+    GET /api/accounts/membership/plans/
+    Trả về danh sách gói VIP đang active.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = MembershipPlanSerializer
+
+    def get_queryset(self):
+        return MembershipPlan.objects.filter(is_active=True).order_by("price_vnd")
+
+
+class MembershipOrderByUserAPIView(ListAPIView):
+    """
+    GET /api/accounts/users/<user_id>/membership/orders/
+    Trả về lịch sử các gói VIP user đã đăng ký (mọi trạng thái).
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = MembershipOrderListSerializer
+    pagination_class = MembershipOrderPagination
+
+    def get_queryset(self):
+        user_id = self.kwargs.get("user_id")
+        if not is_admin_like(self.request.user) and str(self.request.user.id) != str(user_id):
+            raise PermissionDenied("NO_PERMISSION_VIEW_USER_MEMBERSHIP_ORDERS")
+        return (
+            MembershipOrder.objects
+            .select_related("user", "plan")
+            .filter(user_id=user_id)
+            .order_by("-created_at")
+        )
